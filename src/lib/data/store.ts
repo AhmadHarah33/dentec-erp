@@ -72,11 +72,24 @@ async function readFromDisk(): Promise<Database> {
       await writeToDisk(seed);
       return seed;
     }
-    if (isReadOnly(err)) {
-      readOnlyFs = true;
-      return buildSeed();
-    }
-    throw err;
+
+    /*
+     * Anything else — a corrupt file, a permission code this host spells
+     * differently, a directory where a file should be — falls back to the
+     * seed rather than taking every page down with it.
+     *
+     * An unreadable store is a broken demo; a store that throws is a white
+     * screen on every route. The cause is logged in full, because silently
+     * serving the seed when someone's real data failed to load would be the
+     * worse failure of the two.
+     */
+    readOnlyFs = true;
+    console.error(
+      `[dentec] could not read ${DB_FILE} (${code ?? "unknown"}) — ` +
+        "serving a seeded in-memory database. Changes will not persist.",
+      err,
+    );
+    return buildSeed();
   }
 }
 
@@ -124,10 +137,18 @@ async function writeToDisk(db: Database): Promise<void> {
 export async function getDb(): Promise<Database> {
   if (state.cache) return state.cache;
   if (!state.loading) {
-    state.loading = readFromDisk().then((db) => {
-      state.cache = db;
-      return db;
-    });
+    state.loading = readFromDisk().then(
+      (db) => {
+        state.cache = db;
+        return db;
+      },
+      (err) => {
+        // Never cache a rejection: a single bad read would otherwise poison
+        // every later request on this instance.
+        state.loading = null;
+        throw err;
+      },
+    );
   }
   return state.loading;
 }
