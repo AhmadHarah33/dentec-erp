@@ -1,0 +1,334 @@
+@import "tailwindcss";
+
+@theme {
+  /*
+   * Brand. The wordmark navy is the ink of the system; the accent blue is the
+   * voice it speaks in — fills, active state, links and chart data. Splitting
+   * the two is what keeps a filled button from reading as a black slab.
+   */
+  --color-canvas: #f7f8fb;
+  --color-surface: #ffffff;
+  --color-sunken: #f1f3f8;
+  --color-line: #e6e9f0;
+  --color-line-strong: #d3d8e4;
+  --color-ink: #131829;
+  --color-muted: #5d6577;
+  --color-faint: #767f99;
+  --color-brand: #1b2350;
+  --color-accent: #2f5bd8;
+  --color-accent-strong: #2447ad;
+  --color-accent-soft: #eaf0fe;
+  --color-accent-line: #cddbfa;
+
+  /*
+   * Status is information, not decoration. Every state in the system maps to
+   * one of these four tones, and each tone is a trio: a readable text colour,
+   * a tint to sit on, and a border. All four text colours clear 4.5:1 on both
+   * white and their own tint.
+   */
+  --color-success: #157a4b;
+  --color-success-soft: #e7f6ee;
+  --color-success-line: #c3e6d3;
+  --color-danger: #b3261e;
+  --color-danger-soft: #fceeec;
+  --color-danger-line: #f0d4cf;
+  --color-warn: #8a5a08;
+  --color-warn-soft: #fdf3e3;
+  --color-warn-line: #f2debb;
+
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+
+  /*
+   * Elevation. Kept to two steps and deliberately faint — a card should read
+   * as lifted off the canvas, never as a drop shadow.
+   */
+  --shadow-card: 0 1px 2px rgba(19, 24, 41, 0.04), 0 1px 3px rgba(19, 24, 41, 0.05);
+  --shadow-pop: 0 4px 14px rgba(19, 24, 41, 0.09), 0 1px 3px rgba(19, 24, 41, 0.06);
+  --shadow-modal: 0 18px 48px rgba(19, 24, 41, 0.2);
+
+  --font-sans: var(--font-cairo), system-ui, sans-serif;
+
+  /*
+   * Type scale. The names are historical; the sizes are the contract.
+   * text-2xs = labels, badges, meta.   text-xs = body and table text.
+   * text-sm  = card and section titles. text-lg = page title.
+   * Cairo runs large for its point size, so 14px body reads comfortably.
+   */
+  --text-2xs: 0.8125rem;
+  --text-2xs--line-height: 1.25rem;
+  --text-xs: 0.875rem;
+  --text-xs--line-height: 1.375rem;
+  --text-sm: 1rem;
+  --text-sm--line-height: 1.5rem;
+  --text-base: 1.0625rem;
+  --text-base--line-height: 1.625rem;
+  --text-lg: 1.5rem;
+  --text-lg--line-height: 2rem;
+
+  /*
+   * Motion. Two durations and one curve, so nothing in the app moves at a
+   * speed nothing else moves at. `swift` is for something that answers a
+   * click — a menu, a tooltip; `glide` is for something that travels across
+   * the screen, where too fast reads as a flicker rather than a movement.
+   *
+   * The curve decelerates only: things arrive and settle, they never
+   * overshoot. An ERP is not a toy.
+   */
+  --ease-settle: cubic-bezier(0.22, 0.8, 0.28, 1);
+  --dur-swift: 160ms;
+  --dur-glide: 260ms;
+}
+
+/* ------------------------------------------------------------------ */
+/* Motion                                                              */
+/* ------------------------------------------------------------------ */
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/*
+ * Panels slide in from whichever edge they are pinned to. The distance is a
+ * variable rather than a fixed sign, because "start" and "end" are opposite
+ * physical directions in Arabic and in Turkish.
+ */
+@keyframes slide-in {
+  from {
+    transform: translateX(var(--slide-from));
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@utility anim-fade {
+  animation: fade-in var(--dur-swift) var(--ease-settle) both;
+}
+
+/* Menus and popovers: they belong to the control that opened them. */
+@utility anim-pop {
+  animation: pop-in var(--dur-swift) var(--ease-settle) both;
+  transform-origin: top center;
+}
+
+@utility anim-rise {
+  animation: rise-in var(--dur-glide) var(--ease-settle) both;
+}
+
+/*
+ * Which physical direction "start" and "end" are is decided once, on the root,
+ * and inherited. Doing it here rather than in a `[dir="rtl"] .anim-slide-end`
+ * override is what makes the responsive form work: the variant's class is
+ * literally named `sm:anim-slide-end`, so a selector written against the bare
+ * name never matches it.
+ */
+[dir="ltr"] {
+  --from-start: -100%;
+  --from-end: 100%;
+}
+
+[dir="rtl"] {
+  --from-start: 100%;
+  --from-end: -100%;
+}
+
+/* Pinned to the inline start — the navigation drawer. */
+@utility anim-slide-start {
+  --slide-from: var(--from-start, -100%);
+  animation: slide-in var(--dur-glide) var(--ease-settle) both;
+}
+
+/* Pinned to the inline end — a record drawer over its list. */
+@utility anim-slide-end {
+  --slide-from: var(--from-end, 100%);
+  animation: slide-in var(--dur-glide) var(--ease-settle) both;
+}
+
+@utility anim-sheet {
+  animation: sheet-up var(--dur-glide) var(--ease-settle) both;
+}
+
+/*
+ * Someone who has asked their system to reduce motion means it. Everything
+ * still appears — it just arrives instantly instead of travelling.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-feature-settings: "kern", "liga", "calt";
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Numbers must line up in tables, in both RTL and LTR. */
+  .num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    direction: ltr;
+    unicode-bidi: isolate;
+    display: inline-block;
+    /*
+     * A figure run is one token. Without this a document number breaks at its
+     * hyphens (INV-/2026-/0079) and a money column loses its alignment, which
+     * is the whole reason this class exists.
+     */
+    white-space: nowrap;
+  }
+  ::selection {
+    background: var(--color-accent-soft);
+  }
+  /* Hairlines, never shadows. */
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+  /*
+   * Form controls fill their container by default. This lives in the base
+   * layer so a width utility at the call site (w-36, max-w-56) still wins —
+   * putting w-full in the component class would beat those utilities.
+   */
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    width: 100%;
+  }
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  button:focus-visible,
+  a:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+  }
+  /* Firefox / WebKit scrollbars kept thin and neutral. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-line-strong);
+    border: 3px solid var(--color-canvas);
+    border-radius: 99px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer utilities {
+  .hairline-b {
+    border-bottom: 1px solid var(--color-line);
+  }
+  .hairline-t {
+    border-top: 1px solid var(--color-line);
+  }
+  /* Logical inline-start edge marker — flips automatically with dir. */
+  .edge-active {
+    border-inline-start: 2px solid var(--color-accent);
+  }
+  .edge-idle {
+    border-inline-start: 2px solid transparent;
+  }
+}
+
+/*
+ * Print. Invoices go out on white A4 regardless of what the screen looks like,
+ * so the app chrome is dropped and the document is given the full page.
+ */
+@page {
+  size: A4;
+  margin: 14mm;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #000;
+  }
+
+  /* Collapse the app shell so the document starts at the top of the sheet. */
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+
+  /* Elevation is a screen device; paper is already a surface. */
+  * {
+    box-shadow: none !important;
+  }
+
+  /* Cards lose their frame on paper — the ruled table is structure enough. */
+  .print-doc [class*="border"] {
+    border-color: #bbb !important;
+  }
+  .print-doc {
+    font-size: 10.5pt;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  thead {
+    display: table-header-group;
+  }
+
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+}

@@ -1,0 +1,9 @@
+node_modules
+.next
+out
+.env*.local
+*.tsbuildinfo
+next-env.d.ts
+
+# Runtime store — regenerated from src/lib/data/seed.ts on first run.
+data/
