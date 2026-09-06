@@ -145,6 +145,60 @@ clears them.
 6. The old `LineChart` drew its hover dot inside a `preserveAspectRatio="none"`
    viewBox, which stretches a circle into an ellipse. Dots, ticks and the
    tooltip are HTML over the SVG now.
+7. `.gitignore` carried a bare `data/` to exclude the runtime JSON store. That
+   pattern matches a directory of that name at ANY depth, so it also excluded
+   `src/lib/data/` — the whole storage layer. The first push was unbuildable.
+   Anchored to `/data/`.
+8. Every route that reads data returned 500 on Vercel. Two faults, described
+   in full below.
+
+## Why the hosted copy 500'd, and why it forgets
+
+Both symptoms have one cause: **on Vercel the application directory is
+read-only.** The bundle is unpacked at `/var/task` and only `/tmp` accepts
+writes. `store.ts` resolves `DATA_DIR` to `path.resolve(process.cwd(), "data")`
+= `/var/task/data`, and on a cold start with no JSON file present it tries to
+lay down the seed there.
+
+Two things went wrong on top of that.
+
+**The errno was not the one being checked.** The read-only guard recognised
+`EROFS`, `EACCES` and `EPERM`. Vercel's overlay answers
+`fs.mkdir('/var/task/data', { recursive: true })` with **`ENOENT`**. That looks
+like "missing parent directory", but a recursive mkdir creates missing parents
+by definition, so it cannot fail for that reason — `ENOENT` there means the
+path cannot be created at all, which is `EROFS` under another name. It is now
+classified as unwritable, along with `ENOTDIR`.
+
+The reason this survived a local test is worth remembering: the simulation
+pointed `DENTEC_DATA_DIR` at a Windows system path, which fails with `EPERM` —
+a code the guard already handled. The test passed while production stayed
+broken. Reproducing the *symptom* is not the same as reproducing the *cause*;
+the honest local repro is a recursive mkdir on a non-existent drive, which
+does return `ENOENT`.
+
+**A throw inside a catch is not caught by its own try.** The seed write runs in
+the `catch` block of `readFromDisk`, so when `writeToDisk` threw, nothing
+handled it — it propagated out of `getDb()` and took down every page that calls
+`snapshot()`, which is every route under `(app)`. A later catch-all added to
+the same catch block could never have helped. The seed write is now guarded on
+its own.
+
+The diagnosis came from a temporary `/api/health` endpoint that reported the
+resolved paths and the errno of each filesystem step. The runtime logs were not
+reachable, and three rounds of guessing had already been wrong; one probe
+answered it. The endpoint was deleted immediately afterwards.
+
+**What this means day to day.** On Vercel the in-memory cache IS the database.
+It is seeded from `buildSeed()` on cold start, accepts every mutation for the
+life of that instance, and is discarded when the instance recycles. Two
+concurrent instances do not share state. So the hosted copy is a demo that
+forgets: fine for checking layout and flow on a phone, useless as a record.
+Local development is unaffected — the disk is writable and every write lands in
+`data/dentec.json`.
+
+Making it remember requires storage that is not the local filesystem. That is
+the Supabase migration, and it is a change to `store.ts` only.
 
 ## Open items
 
