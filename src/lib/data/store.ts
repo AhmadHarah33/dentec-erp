@@ -65,11 +65,20 @@ async function readFromDisk(): Promise<Database> {
   } catch (err: unknown) {
     const code = (err as NodeJS.ErrnoException)?.code;
     if (code === "ENOENT") {
-      // First run — lay down the seed so the app is never staring at nothing.
-      // writeToDisk swallows a read-only filesystem, so a serverless cold
-      // start seeds into memory instead of throwing on every page.
+      /*
+       * First run — lay down the seed so the app is never staring at nothing.
+       *
+       * The write is guarded separately even though writeToDisk already
+       * swallows an unwritable disk: we are inside a catch block here, and an
+       * exception thrown in a catch is not caught by its own try. That is
+       * precisely how a failed seed write took every page down.
+       */
       const seed = buildSeed();
-      await writeToDisk(seed);
+      try {
+        await writeToDisk(seed);
+      } catch (writeErr: unknown) {
+        console.error("[dentec] could not persist the seed", writeErr);
+      }
       return seed;
     }
 
@@ -107,10 +116,25 @@ async function readFromDisk(): Promise<Database> {
  */
 let readOnlyFs = false;
 
-/** Errors that mean "this disk will never accept a write", not "try again". */
-function isReadOnly(err: unknown): boolean {
+/**
+ * Errors that mean "this disk will never accept a write", not "try again".
+ *
+ * ENOENT is in this list because of how it arrives. `fs.mkdir` with
+ * `recursive: true` creates missing parents, so it cannot normally fail
+ * because a parent is absent — and Vercel's read-only overlay answers a mkdir
+ * under /var/task with ENOENT rather than EROFS. A recursive mkdir reporting
+ * "no such file or directory" means the path cannot be created at all, which
+ * is the same conclusion as EROFS by a different name.
+ */
+function isNotWritable(err: unknown): boolean {
   const code = (err as NodeJS.ErrnoException)?.code;
-  return code === "EROFS" || code === "EACCES" || code === "EPERM";
+  return (
+    code === "EROFS" ||
+    code === "EACCES" ||
+    code === "EPERM" ||
+    code === "ENOENT" ||
+    code === "ENOTDIR"
+  );
 }
 
 async function writeToDisk(db: Database): Promise<void> {
@@ -124,11 +148,14 @@ async function writeToDisk(db: Database): Promise<void> {
     // or the new one, never a half-written one.
     await fs.rename(tmp, DB_FILE);
   } catch (err: unknown) {
-    if (!isReadOnly(err)) throw err;
+    // A disk that is full or failing is a real problem and still throws; a
+    // disk that cannot be written to at all switches the store to memory.
+    if (!isNotWritable(err)) throw err;
     readOnlyFs = true;
     console.warn(
-      `[dentec] ${DATA_DIR} is read-only — running from memory. ` +
+      `[dentec] ${DATA_DIR} cannot be written — running from memory. ` +
         "Changes will be lost when this instance recycles.",
+      (err as NodeJS.ErrnoException)?.code,
     );
   }
 }
