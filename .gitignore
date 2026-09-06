@@ -5,5 +5,7 @@ out
 *.tsbuildinfo
 next-env.d.ts
 
-# Runtime store — regenerated from src/lib/data/seed.ts on first run.
-data/
+# The runtime JSON store at the repo root, regenerated from
+# src/lib/data/seed.ts on first run. Anchored with a leading slash: a bare
+# "data/" also matches src/lib/data/, which is source.
+/data/
