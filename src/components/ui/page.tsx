@@ -7,16 +7,26 @@ export function PageHeader({
   title,
   subtitle,
   actions,
+  size = "default",
 }: {
   title: string;
   subtitle?: string;
   actions?: ReactNode;
+  /** "hero" is for the one page people land on — the dashboard. */
+  size?: "default" | "hero";
 }) {
   return (
     <header className="flex flex-wrap items-start justify-between gap-3 mb-6">
       <div className="min-w-0">
-        <h1 className="text-lg font-semibold tracking-tight leading-tight">{title}</h1>
-        {subtitle && <p className="text-xs text-muted mt-1">{subtitle}</p>}
+        <h1
+          className={cn(
+            "font-bold tracking-tight text-balance",
+            size === "hero" ? "text-3xl leading-tight" : "text-lg font-semibold leading-tight",
+          )}
+        >
+          {title}
+        </h1>
+        {subtitle && <p className="text-xs text-muted mt-1.5">{subtitle}</p>}
       </div>
       {actions && <div className="flex items-center gap-2 shrink-0 no-print">{actions}</div>}
     </header>
@@ -107,8 +117,8 @@ export function StatTile({
 
   const shell = cn(
     "border border-line bg-surface rounded-lg shadow-card p-4",
-    "flex flex-col gap-3 transition-colors",
-    href && "hover:border-line-strong hover:bg-sunken/40",
+    "flex flex-col gap-3 transition-[background-color,border-color,transform] duration-[var(--dur-swift)]",
+    href && "hover:border-line-strong hover:bg-sunken/40 active:scale-[0.99]",
   );
 
   return href ? (
@@ -217,7 +227,7 @@ export function ListRow({
     <li>
       <Link
         href={href}
-        className="flex items-center gap-3 px-4 h-12 hover:bg-sunken transition-colors"
+        className="flex items-center gap-3 px-4 h-12 hover:bg-sunken active:bg-sunken transition-colors duration-[var(--dur-swift)]"
       >
         <div className="min-w-0 flex-1">
           <div className="text-xs font-medium truncate">{title}</div>

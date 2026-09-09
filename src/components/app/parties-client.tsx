@@ -1,7 +1,18 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import type { CurrencyCode, Party, PartyKind } from "@/lib/data/types";
+import type {
+  BillingRegion,
+  CurrencyCode,
+  Party,
+  PartyKind,
+} from "@/lib/data/types";
+import { BILLING_REGIONS } from "@/lib/data/types";
+import {
+  blankSyriaProfile,
+  blankTurkeyProfile,
+  isValidTurkishTaxId,
+} from "@/lib/billing/region";
 import { useT } from "@/lib/i18n/context";
 import type { MessageKey } from "@/lib/i18n";
 import { PARTY_KINDS } from "@/lib/labels";
@@ -45,6 +56,10 @@ const BLANK = {
   creditLimit: 0,
   notes: "",
   active: true,
+  // Dentec is Turkish, so a new customer is domestic until told otherwise.
+  billingRegion: "TR" as BillingRegion,
+  turkey: blankTurkeyProfile(),
+  syria: blankSyriaProfile(),
 };
 
 export function PartiesClient({
@@ -65,6 +80,8 @@ export function PartiesClient({
   locale: string;
 }) {
   const t = useT();
+  // Only customers are billed, so only customers carry a billing regime.
+  const isCustomer = which === "customers";
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Party | null>(null);
@@ -114,7 +131,14 @@ export function PartiesClient({
     void id;
     void createdAt;
     void updatedAt;
-    setForm(rest);
+    // A row written before dual-region billing has neither profile; the form
+    // needs both present or its inputs flip from controlled to uncontrolled.
+    setForm({
+      ...rest,
+      billingRegion: rest.billingRegion ?? "TR",
+      turkey: rest.turkey ?? blankTurkeyProfile(),
+      syria: rest.syria ?? blankSyriaProfile(),
+    });
     setEditing(party);
     setError(null);
     setOpen(true);
@@ -122,6 +146,16 @@ export function PartiesClient({
 
   function submit() {
     setError(null);
+
+    // A malformed VKN is caught here rather than at the integrator, where the
+    // rejection arrives hours later attached to a document already sent.
+    if (isCustomer && form.billingRegion === "TR" && form.turkey.taxId.trim()) {
+      if (!isValidTurkishTaxId(form.turkey.taxIdKind, form.turkey.taxId)) {
+        setError(t("compliance.invalidTaxId", { detail: form.turkey.taxId }));
+        return;
+      }
+    }
+
     startTransition(async () => {
       const result = await saveParty(which, editing?.id ?? null, form);
       if (result.ok) setOpen(false);
@@ -355,6 +389,193 @@ export function PartiesClient({
               onChange={(e) => setForm({ ...form, creditLimit: Number(e.target.value) })}
             />
           </Field>
+          {isCustomer && (
+            <>
+              <Field label={t("billing.region")} className="sm:col-span-2">
+                <Select
+                  value={form.billingRegion}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      billingRegion: e.target.value as BillingRegion,
+                    })
+                  }
+                >
+                  {BILLING_REGIONS.map((r) => (
+                    <option key={r} value={r}>
+                      {t(("billing.region." + r) as MessageKey)}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+
+              {form.billingRegion === "TR" ? (
+                <>
+                  <Field label={t("billing.taxIdKind")}>
+                    <Select
+                      value={form.turkey.taxIdKind}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          turkey: {
+                            ...form.turkey,
+                            taxIdKind: e.target.value as "vkn" | "tckn",
+                          },
+                        })
+                      }
+                    >
+                      <option value="vkn">{t("billing.vkn")}</option>
+                      <option value="tckn">{t("billing.tckn")}</option>
+                    </Select>
+                  </Field>
+                  <Field label={t("billing.taxId")}>
+                    <Input
+                      value={form.turkey.taxId}
+                      inputMode="numeric"
+                      maxLength={form.turkey.taxIdKind === "tckn" ? 11 : 10}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          turkey: {
+                            ...form.turkey,
+                            // Digits only: pasted numbers arrive with spaces.
+                            taxId: e.target.value.replace(/\D/g, ""),
+                          },
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label={t("billing.taxOffice")}>
+                    <Input
+                      value={form.turkey.taxOffice}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          turkey: { ...form.turkey, taxOffice: e.target.value },
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label={t("billing.tradeRegistry")}>
+                    <Input
+                      value={form.turkey.tradeRegistryNo}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          turkey: {
+                            ...form.turkey,
+                            tradeRegistryNo: e.target.value,
+                          },
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label={t("billing.gibAlias")} className="sm:col-span-2">
+                    <Input
+                      value={form.turkey.gibAlias}
+                      placeholder="urn:mail:defaultpk@example.com.tr"
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          turkey: { ...form.turkey, gibAlias: e.target.value },
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label={t("billing.mersis")}>
+                    <Input
+                      value={form.turkey.mersisNo}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          turkey: { ...form.turkey, mersisNo: e.target.value },
+                        })
+                      }
+                    />
+                  </Field>
+                  <label className="flex items-start gap-2 text-xs cursor-pointer sm:col-span-2">
+                    <input
+                      type="checkbox"
+                      checked={form.turkey.eInvoiceUser}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          turkey: {
+                            ...form.turkey,
+                            eInvoiceUser: e.target.checked,
+                          },
+                        })
+                      }
+                      className="accent-[var(--color-accent)] mt-0.5"
+                    />
+                    <span>
+                      {t("billing.eInvoiceUser")}
+                      <span className="block text-2xs text-muted">
+                        {t("billing.eInvoiceUserHint")}
+                      </span>
+                    </span>
+                  </label>
+                </>
+              ) : (
+                <>
+                  <Field label={t("billing.commercialRegister")}>
+                    <Input
+                      value={form.syria.commercialRegisterNo}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          syria: {
+                            ...form.syria,
+                            commercialRegisterNo: e.target.value,
+                          },
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label={t("billing.importLicense")}>
+                    <Input
+                      value={form.syria.importLicenseNo}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          syria: {
+                            ...form.syria,
+                            importLicenseNo: e.target.value,
+                          },
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label={t("billing.customsOffice")}>
+                    <Input
+                      value={form.syria.customsOffice}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          syria: { ...form.syria, customsOffice: e.target.value },
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field
+                    label={t("billing.exemptionNote")}
+                    className="sm:col-span-2"
+                  >
+                    <Textarea
+                      value={form.syria.exemptionNote}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          syria: { ...form.syria, exemptionNote: e.target.value },
+                        })
+                      }
+                    />
+                  </Field>
+                </>
+              )}
+            </>
+          )}
+
           <Field label={t("label.notes")} className="sm:col-span-2">
             <Textarea
               value={form.notes}

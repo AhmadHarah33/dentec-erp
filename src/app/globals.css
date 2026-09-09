@@ -2,9 +2,10 @@
 
 @theme {
   /*
-   * Brand. The wordmark navy is the ink of the system; the accent blue is the
-   * voice it speaks in — fills, active state, links and chart data. Splitting
-   * the two is what keeps a filled button from reading as a black slab.
+   * Brand. Both tokens now come straight off the logo's navy — the wordmark
+   * uses it flat, the accent uses it as the voice the app speaks in (fills,
+   * active state, links, chart data), with -strong/-soft/-line as darker,
+   * paler and mid tints of that same hue.
    */
   --color-canvas: #f7f8fb;
   --color-surface: #ffffff;
@@ -15,10 +16,10 @@
   --color-muted: #5d6577;
   --color-faint: #767f99;
   --color-brand: #1b2350;
-  --color-accent: #2f5bd8;
-  --color-accent-strong: #2447ad;
-  --color-accent-soft: #eaf0fe;
-  --color-accent-line: #cddbfa;
+  --color-accent: #1a224d;
+  --color-accent-strong: #161c41;
+  --color-accent-soft: #edeef8;
+  --color-accent-line: #c8cdea;
 
   /*
    * Status is information, not decoration. Every state in the system maps to
@@ -48,6 +49,14 @@
   --shadow-card: 0 1px 2px rgba(19, 24, 41, 0.04), 0 1px 3px rgba(19, 24, 41, 0.05);
   --shadow-pop: 0 4px 14px rgba(19, 24, 41, 0.09), 0 1px 3px rgba(19, 24, 41, 0.06);
   --shadow-modal: 0 18px 48px rgba(19, 24, 41, 0.2);
+  /*
+   * The dashboard's cards trade the hairline for a "shadow as border": a
+   * crisp 1px ring plus a soft ambient fall, so the edge stays sharp at any
+   * zoom level instead of aliasing the way a 1px border can. Still just an
+   * elevation step, not a third one — same faintness budget as shadow-card.
+   */
+  --shadow-ring: 0 0 0 1px rgba(19, 24, 41, 0.07), 0 1px 2px rgba(19, 24, 41, 0.04),
+    0 2px 8px rgba(19, 24, 41, 0.05);
 
   --font-sans: var(--font-cairo), system-ui, sans-serif;
 
@@ -133,6 +142,17 @@
   transform-origin: top center;
 }
 
+/*
+ * Same pop, but anchored to whichever trigger sits at the panel's inline-end
+ * corner (a chevron button, an avatar) instead of its center — the menu should
+ * visibly grow from the control that opened it. "End" is a physical corner
+ * that flips with direction, same reasoning as --from-start/--from-end above.
+ */
+@utility anim-pop-end {
+  animation: pop-in var(--dur-swift) var(--ease-settle) both;
+  transform-origin: var(--transform-origin-end, top right);
+}
+
 @utility anim-rise {
   animation: rise-in var(--dur-glide) var(--ease-settle) both;
 }
@@ -147,11 +167,15 @@
 [dir="ltr"] {
   --from-start: -100%;
   --from-end: 100%;
+  --transform-origin-end: top right;
+  --transform-origin-start: top left;
 }
 
 [dir="rtl"] {
   --from-start: 100%;
   --from-end: -100%;
+  --transform-origin-end: top left;
+  --transform-origin-start: top right;
 }
 
 /* Pinned to the inline start — the navigation drawer. */
@@ -182,6 +206,50 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /*
+   * The rule above zeroes duration but not the keyframe itself, so a sheet or
+   * slide-in panel still snaps in from its translated-away starting frame —
+   * off-screen, then instantly there. Swap the spatial ones to a plain
+   * cross-fade instead, per the "gentler equivalent, not no feedback" rule.
+   * Unlayered, so it beats the @utility rules above without needing
+   * !important on the property itself.
+   */
+  .anim-pop,
+  .anim-pop-end,
+  .anim-rise,
+  .anim-slide-start,
+  .anim-slide-end,
+  .anim-sheet,
+  .stagger > * {
+    animation: fade-in var(--dur-swift) linear both;
+  }
+}
+
+/*
+ * Frostier, not blurrier: raise opacity and drop the blur on every
+ * translucent surface in the app (topbar, scrims, mobile-nav backdrop).
+ */
+@media (prefers-reduced-transparency: reduce) {
+  [class*="backdrop-blur"] {
+    backdrop-filter: none !important;
+    background-color: var(--color-surface) !important;
+  }
+  .bg-ink\/45,
+  .bg-ink\/35 {
+    background-color: var(--color-ink) !important;
+  }
+}
+
+/* Near-solid surfaces, clearly bordered — no reliance on faint hairlines. */
+@media (prefers-contrast: more) {
+  * {
+    border-color: var(--color-line-strong);
+  }
+  [class*="backdrop-blur"] {
+    backdrop-filter: none !important;
+    background-color: var(--color-surface) !important;
   }
 }
 
@@ -274,6 +342,32 @@
   }
   .edge-idle {
     border-inline-start: 2px solid transparent;
+  }
+  /*
+   * Entrance stagger for a short, fixed-size grid — the dashboard's KPI
+   * tiles and attention cards. Deliberately not used on table rows: a
+   * per-row delay looks lively at four items and looks slow at forty.
+   */
+  .stagger > * {
+    animation: rise-in var(--dur-glide) var(--ease-settle) both;
+  }
+  .stagger > *:nth-child(1) {
+    animation-delay: 0ms;
+  }
+  .stagger > *:nth-child(2) {
+    animation-delay: 40ms;
+  }
+  .stagger > *:nth-child(3) {
+    animation-delay: 80ms;
+  }
+  .stagger > *:nth-child(4) {
+    animation-delay: 120ms;
+  }
+  .stagger > *:nth-child(5) {
+    animation-delay: 160ms;
+  }
+  .stagger > *:nth-child(6) {
+    animation-delay: 200ms;
   }
 }
 

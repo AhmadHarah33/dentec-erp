@@ -17,16 +17,23 @@ import {
 import { formatMoney, formatMoneyCompact, formatNumber } from "@/lib/money";
 import {
   daysOverdue,
-  daysBetween,
   formatDate,
   formatMonth,
   isInMonth,
   lastMonths,
   today,
 } from "@/lib/dates";
-import { PageHeader, StatTile, ListCard, ListRow, EmptyState } from "@/components/ui/page";
-import { Card, CardHeader, LinkButton, Badge, Num } from "@/components/ui/primitives";
-import { LineChart, BarList } from "@/components/ui/charts";
+import { PageHeader, EmptyState } from "@/components/ui/page";
+import { Card, LinkButton, Num } from "@/components/ui/primitives";
+import {
+  KpiTile,
+  DashCard,
+  PeriodToggle,
+  RankedList,
+  AttentionCard,
+  AttentionRow,
+} from "@/components/ui/dashboard";
+import { TrendBars } from "@/components/ui/dashboard-chart";
 import {
   IconCart,
   IconCheck,
@@ -37,6 +44,7 @@ import {
   IconWrench,
 } from "@/components/ui/icons";
 import { SERVICE_TONE, serviceKey } from "@/lib/labels";
+import { countedPhrase, type CountedNoun } from "@/lib/plural";
 
 /**
  * The dashboard is a queue, not a report.
@@ -51,11 +59,17 @@ import { SERVICE_TONE, serviceKey } from "@/lib/labels";
  * figures it has no use for. No page is hidden either way: the role is a
  * preference, not a permission.
  */
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
   const { locale, t } = await getI18n();
   const role = await getViewRole();
   const db = await snapshot();
   const { baseCurrency } = db.settings;
+  const { period } = await searchParams;
+  const trendMonths = period === "6" ? 6 : 12;
 
   const money = (n: number) => formatMoney(n, baseCurrency, locale);
   const compact = (n: number) => formatMoneyCompact(n, baseCurrency, locale);
@@ -103,11 +117,17 @@ export default async function DashboardPage() {
 
   const receivables = totalReceivables(db);
   const stockTotal = stockValue(db.items, index);
-  const trend = salesByMonth(db.salesInvoices, 12);
+  const trend = salesByMonth(db.salesInvoices, trendMonths);
   const yearTotal = trend.reduce((s, p) => s + p.sales, 0);
+  const peakSales = Math.max(...trend.map((p) => p.sales), 0);
   const top = salesByItem(db).slice(0, 6);
 
-  const itemName = (item: { nameAr: string; nameTr: string }) =>
+    /** A counted phrase, digits and noun — see `src/lib/plural.ts`. */
+  const counted = (noun: CountedNoun, n: number) => ({
+    d: countedPhrase(locale, noun, n),
+  });
+
+const itemName = (item: { nameAr: string; nameTr: string }) =>
     locale === "tr" && item.nameTr ? item.nameTr : item.nameAr;
   const customerName = (id: string) => db.customers.find((c) => c.id === id)?.name ?? "—";
 
@@ -116,7 +136,7 @@ export default async function DashboardPage() {
   const showMoney = role !== "service";
 
   const overdueTile = (
-    <StatTile
+    <KpiTile
       key="overdue"
       label={t("dash.overdueAmount")}
       value={compact(overdueAmount)}
@@ -124,12 +144,12 @@ export default async function DashboardPage() {
       href="/accounting"
       tone={overdue.length > 0 ? "danger" : "success"}
       chip={overdue.length > 0 ? t("dash.tileBad") : t("dash.tileGood")}
-      meta={overdue.length > 0 ? t("dash.oldestOverdue", { n: oldestOverdue }) : undefined}
+      meta={overdue.length > 0 ? t("dash.oldestOverdue", counted("day", oldestOverdue)) : undefined}
     />
   );
 
   const lowStockTile = (
-    <StatTile
+    <KpiTile
       key="low"
       label={t("dash.belowMinimum")}
       value={count(low.length)}
@@ -148,7 +168,7 @@ export default async function DashboardPage() {
   );
 
   const jobsTile = (
-    <StatTile
+    <KpiTile
       key="jobs"
       label={t("dash.openJobsCount")}
       value={count(jobs.length)}
@@ -167,7 +187,7 @@ export default async function DashboardPage() {
   );
 
   const purchasesTile = (
-    <StatTile
+    <KpiTile
       key="po"
       label={t("dash.pendingPurchases")}
       value={count(pendingPOs.length)}
@@ -185,7 +205,7 @@ export default async function DashboardPage() {
     role === "accounting"
       ? [
           overdueTile,
-          <StatTile
+          <KpiTile
             key="recv"
             label={t("dash.receivables")}
             value={compact(receivables)}
@@ -193,7 +213,7 @@ export default async function DashboardPage() {
             href="/accounting"
             tone="accent"
           />,
-          <StatTile
+          <KpiTile
             key="cash"
             label={t("page.accounting.cashIn")}
             value={compact(collected)}
@@ -207,7 +227,7 @@ export default async function DashboardPage() {
       : role === "service"
         ? [
             jobsTile,
-            <StatTile
+            <KpiTile
               key="await"
               label={t("service.awaiting_parts")}
               value={count(awaitingParts)}
@@ -217,7 +237,7 @@ export default async function DashboardPage() {
               chip={awaitingParts > 0 ? t("dash.tileWatch") : t("dash.tileGood")}
             />,
             lowStockTile,
-            <StatTile
+            <KpiTile
               key="done"
               label={t("service.delivered")}
               value={count(deliveredThisMonth)}
@@ -230,102 +250,86 @@ export default async function DashboardPage() {
         : [overdueTile, lowStockTile, jobsTile, purchasesTile];
 
   const overdueList = (
-    <ListCard
+    <AttentionCard
       key="overdue"
       title={t("dash.overdueInvoices")}
-      icon={IconDocument}
-      tone="danger"
       count={overdue.length}
       href="/accounting"
       viewAllLabel={t("dash.viewAll")}
       emptyTitle={t("empty.none")}
     >
       {overdue.slice(0, 5).map((inv) => (
-        <ListRow
+        <AttentionRow
           key={inv.id}
           href={"/invoices/" + inv.id}
           title={customerName(inv.customerId)}
-          subtitle={t("dash.daysLate", { n: daysOverdue(inv.dueDate) })}
           value={money(invoiceOutstanding(inv, db.payments))}
           valueTone="danger"
         />
       ))}
-    </ListCard>
+    </AttentionCard>
   );
 
   const lowList = (
-    <ListCard
+    <AttentionCard
       key="low"
       title={t("dash.belowMinimum")}
-      icon={IconLayers}
-      tone={outOfStock > 0 ? "danger" : "warn"}
       count={low.length}
       href="/inventory"
       viewAllLabel={t("dash.viewAll")}
       emptyTitle={t("empty.none")}
     >
       {low.slice(0, 5).map((row) => (
-        <ListRow
+        <AttentionRow
           key={row.item.id}
           href="/inventory"
           title={itemName(row.item)}
-          subtitle={row.item.sku}
-          badge={
-            <Badge tone={row.health === "out" ? "danger" : "warn"}>
-              {t(row.health === "out" ? "health.out" : "health.low")}
-            </Badge>
-          }
           value={count(row.qty)}
           valueTone={row.health === "out" ? "danger" : "warn"}
         />
       ))}
-    </ListCard>
+    </AttentionCard>
   );
 
   const jobsList = (
-    <ListCard
+    <AttentionCard
       key="jobs"
       title={t("dash.openJobs")}
-      icon={IconWrench}
-      tone={awaitingParts > 0 ? "warn" : "accent"}
       count={jobs.length}
       href="/service"
       viewAllLabel={t("dash.viewAll")}
       emptyTitle={t("empty.none")}
     >
       {jobs.slice(0, 5).map((job) => (
-        <ListRow
+        <AttentionRow
           key={job.id}
           href={"/service/" + job.id}
           title={job.machineLabel || customerName(job.customerId)}
-          subtitle={t("dash.daysOpen", { n: daysBetween(job.date, now) })}
-          badge={<Badge tone={SERVICE_TONE[job.status]}>{t(serviceKey(job.status))}</Badge>}
+          status={t(serviceKey(job.status))}
+          statusTone={SERVICE_TONE[job.status]}
         />
       ))}
-    </ListCard>
+    </AttentionCard>
   );
 
   const purchasesList = (
-    <ListCard
+    <AttentionCard
       key="po"
       title={t("dash.pendingPurchases")}
-      icon={IconCart}
-      tone="accent"
       count={pendingPOs.length}
       href="/purchases"
       viewAllLabel={t("dash.viewAll")}
       emptyTitle={t("empty.none")}
     >
       {pendingPOs.slice(0, 5).map((po) => (
-        <ListRow
+        <AttentionRow
           key={po.id}
           href={"/purchases/" + po.id}
           title={db.suppliers.find((s) => s.id === po.supplierId)?.name ?? "—"}
-          subtitle={formatDate(po.expectedDate, locale)}
           value={money(purchaseTotalBase(po))}
         />
       ))}
-    </ListCard>
+    </AttentionCard>
   );
 
   const lists =
@@ -351,6 +355,7 @@ export default async function DashboardPage() {
   return (
     <>
       <PageHeader
+        size="hero"
         title={t("dash.greeting")}
         subtitle={formatDate(now, locale)}
         actions={
@@ -381,7 +386,7 @@ export default async function DashboardPage() {
         }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">{tiles}</div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8 stagger">{tiles}</div>
 
       <h2 className="text-sm font-semibold mb-4">{t("dash.needsAttention")}</h2>
 
@@ -390,26 +395,26 @@ export default async function DashboardPage() {
           <EmptyState title={t("dash.allClear")} hint={t("dash.allClearHint")} />
         </Card>
       ) : (
-        <div className={"grid gap-4 mb-8 " + listCols}>{lists.map((l) => l.node)}</div>
+        <div className={"grid gap-4 mb-8 stagger " + listCols}>{lists.map((l) => l.node)}</div>
       )}
 
       {showMoney ? (
         <>
           <h2 className="text-sm font-semibold mb-4">{t("dash.performance")}</h2>
 
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-            <StatTile
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-4 stagger">
+            <KpiTile
               label={t("dash.salesThisMonth")}
               value={compact(monthSales)}
               delta={delta}
-              meta={t("dash.fromInvoices", { n: monthInvoices.length })}
+              meta={t("dash.fromInvoices", counted("invoice", monthInvoices.length))}
             />
-            <StatTile
+            <KpiTile
               label={t("dash.receivables")}
               value={compact(receivables)}
               meta={t("dash.vsLastMonth")}
             />
-            <StatTile
+            <KpiTile
               label={t("dash.stockValue")}
               value={compact(stockTotal)}
               meta={t("dash.atStandardCost")}
@@ -417,59 +422,68 @@ export default async function DashboardPage() {
           </div>
 
           <div className="grid lg:grid-cols-3 gap-4">
-            <Card className="lg:col-span-2">
-              <CardHeader title={t("dash.salesTrend")} meta={t("dash.lastMonths")} />
-              <div className="p-4">
-                {/* The card leads with the figure the shape is made of. */}
-                <div className="flex items-baseline gap-2 mb-5">
-                  <Num className="text-2xl font-bold tracking-tight leading-none">
-                    {compact(yearTotal)}
-                  </Num>
-                  <span className="text-2xs text-muted">{t("dash.periodTotal")}</span>
-                </div>
-                <LineChart
-                  points={trend.map((p) => ({
-                    label: formatMonth(p.month, locale),
-                    value: p.sales,
-                    meta: t("dash.fromInvoices", { n: p.count }),
+            <DashCard
+              className="lg:col-span-2"
+              title={t("dash.salesTrend")}
+              action={
+                <PeriodToggle
+                  param="period"
+                  value={trendMonths === 6 ? "6" : "12"}
+                  ariaLabel={t("dash.salesTrend")}
+                  options={[
+                    { value: "6", label: t("dash.months6") },
+                    { value: "12", label: t("dash.months12") },
+                  ]}
+                />
+              }
+            >
+              {/* The card leads with the figure the shape is made of. */}
+              <div className="flex items-baseline gap-2 mb-6">
+                <Num className="text-2xl font-bold tracking-tight leading-none">
+                  {compact(yearTotal)}
+                </Num>
+                <span className="text-2xs text-muted">{t("dash.periodTotal")}</span>
+              </div>
+              <TrendBars
+                points={trend.map((p) => ({
+                  label: formatMonth(p.month, locale),
+                  value: p.sales,
+                  meta: t("dash.fromInvoices", counted("invoice", p.count)),
+                  highlight: p.month === thisMonth || (p.sales === peakSales && p.sales > 0),
+                }))}
+                currency={baseCurrency}
+                locale={locale}
+              />
+            </DashCard>
+
+            <DashCard title={t("dash.topItems")}>
+              {top.length === 0 ? (
+                <EmptyState compact title={t("empty.invoices")} />
+              ) : (
+                <RankedList
+                  points={top.map((r) => ({
+                    label: r.item ? itemName(r.item) : "—",
+                    value: r.revenue,
                   }))}
                   currency={baseCurrency}
                   locale={locale}
                 />
-              </div>
-            </Card>
-
-            <Card>
-              <CardHeader title={t("dash.topItems")} />
-              <div className="p-4">
-                {top.length === 0 ? (
-                  <EmptyState compact title={t("empty.invoices")} />
-                ) : (
-                  <BarList
-                    points={top.map((r) => ({
-                      label: r.item ? itemName(r.item) : "—",
-                      value: r.revenue,
-                    }))}
-                    currency={baseCurrency}
-                    locale={locale}
-                  />
-                )}
-              </div>
-            </Card>
+              )}
+            </DashCard>
           </div>
         </>
       ) : (
         /* Service gets the stock picture where the money picture would be. */
         <>
           <h2 className="text-sm font-semibold mb-4">{t("dash.performance")}</h2>
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-            <StatTile
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 stagger">
+            <KpiTile
               label={t("dash.stockValue")}
               value={compact(stockTotal)}
               meta={t("dash.atStandardCost")}
             />
-            <StatTile label={t("dash.pendingPurchases")} value={count(pendingPOs.length)} />
-            <StatTile label={t("service.delivered")} value={count(deliveredThisMonth)} />
+            <KpiTile label={t("dash.pendingPurchases")} value={count(pendingPOs.length)} />
+            <KpiTile label={t("service.delivered")} value={count(deliveredThisMonth)} />
           </div>
         </>
       )}

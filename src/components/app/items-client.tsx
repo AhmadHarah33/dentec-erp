@@ -1,17 +1,25 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import type { Category, CurrencyCode, Item, ItemType, Unit } from "@/lib/data/types";
+import type {
+  Category,
+  CategoryScope,
+  CurrencyCode,
+  Item,
+  ItemType,
+  Unit,
+} from "@/lib/data/types";
 import { useT } from "@/lib/i18n/context";
 import type { MessageKey } from "@/lib/i18n";
 import { categoryPath, localName, UNITS } from "@/lib/labels";
 import { formatMoney, formatNumber } from "@/lib/money";
 import { stockHealth } from "@/lib/stock";
-import { deleteItem, saveItem } from "@/app/actions/catalog";
-import { PageHeader } from "@/components/ui/page";
+import { deleteItem, saveCategory, saveItem } from "@/app/actions/catalog";
+import { PageHeader, EmptyState, Toolbar } from "@/components/ui/page";
 import {
   Badge,
   Button,
+  CardHeader,
   Dot,
   Field,
   Input,
@@ -20,11 +28,10 @@ import {
   Select,
   Textarea,
 } from "@/components/ui/primitives";
-import { DataTable, type Column } from "@/components/ui/table";
 import { Modal, Confirm } from "@/components/ui/modal";
 import { Drawer, DrawerSection } from "@/components/ui/drawer";
 import { DetailRow } from "@/components/ui/page";
-import { IconPlus } from "@/components/ui/icons";
+import { IconPlus, IconSearch, IconTag } from "@/components/ui/icons";
 
 interface Props {
   itemType: ItemType;
@@ -40,6 +47,8 @@ interface Props {
   defaultTaxRate: number;
   locale: string;
 }
+
+const SCOPES: CategoryScope[] = ["product", "spare_part", "both"];
 
 function blank(itemType: ItemType, taxRate: number) {
   return {
@@ -62,6 +71,10 @@ function blank(itemType: ItemType, taxRate: number) {
   };
 }
 
+function blankCategory(itemType: ItemType) {
+  return { nameAr: "", nameTr: "", appliesTo: itemType as CategoryScope };
+}
+
 export function ItemsClient({
   itemType,
   title,
@@ -82,8 +95,12 @@ export function ItemsClient({
   const [form, setForm] = useState(() => blank(itemType, defaultTaxRate));
   const [confirming, setConfirming] = useState<Item | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [categoryFilter, setCategoryFilter] = useState("");
+  const [query, setQuery] = useState("");
   const [showInactive, setShowInactive] = useState(false);
+  const [movingId, setMovingId] = useState<string | null>(null);
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [categoryForm, setCategoryForm] = useState(() => blankCategory(itemType));
+  const [categoryError, setCategoryError] = useState<string | null>(null);
 
   const money = (n: number) => formatMoney(n, currency, locale);
   const [viewing, setViewing] = useState<Item | null>(null);
@@ -94,15 +111,60 @@ export function ItemsClient({
     [categories, itemType],
   );
 
-  const rows = useMemo(
+  // Alphabetical by path, so "Parent › Child" categories sort with their kin.
+  const orderedCategories = useMemo(
     () =>
-      items.filter(
-        (i) =>
-          (showInactive || i.active) &&
-          (!categoryFilter || i.categoryId === categoryFilter),
-      ),
-    [items, categoryFilter, showInactive],
+      usable
+        .slice()
+        .sort((a, b) =>
+          categoryPath(a, categories, locale).localeCompare(
+            categoryPath(b, categories, locale),
+            locale,
+          ),
+        ),
+    [usable, categories, locale],
   );
+
+  const visibleItems = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return items.filter((i) => {
+      if (!showInactive && !i.active) return false;
+      if (!q) return true;
+      const haystack = `${i.sku} ${i.nameAr} ${i.nameTr} ${i.brand} ${i.model} ${i.barcode}`.toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [items, showInactive, query]);
+
+  // One card per category, plus an "uncategorized" card — spacing between
+  // cards is what makes the catalog scannable instead of one long list.
+  const groups = useMemo(() => {
+    const byCategory = new Map<string, Item[]>();
+    for (const item of visibleItems) {
+      const key = item.categoryId ?? "";
+      const bucket = byCategory.get(key);
+      if (bucket) bucket.push(item);
+      else byCategory.set(key, [item]);
+    }
+    const sortRows = (rows: Item[]) =>
+      rows.slice().sort((a, b) => localName(a, locale).localeCompare(localName(b, locale), locale));
+
+    const result: { id: string; label: string; rows: Item[] }[] = [];
+    for (const category of orderedCategories) {
+      const rows = byCategory.get(category.id);
+      if (rows?.length) {
+        result.push({
+          id: category.id,
+          label: categoryPath(category, categories, locale),
+          rows: sortRows(rows),
+        });
+      }
+    }
+    const uncategorized = byCategory.get("");
+    if (uncategorized?.length) {
+      result.push({ id: "", label: t("label.uncategorized"), rows: sortRows(uncategorized) });
+    }
+    return result;
+  }, [visibleItems, orderedCategories, categories, locale, t]);
 
   function openNew() {
     setForm(blank(itemType, defaultTaxRate));
@@ -140,119 +202,38 @@ export function ItemsClient({
     });
   }
 
-  const columns: Column<Item>[] = [
-    {
-      key: "sku",
-      header: t("label.sku"),
-      width: "110px",
-      secondary: true,
-      sort: (r) => r.sku,
-      search: (r) => r.sku,
-      render: (r) => <Num className="text-muted text-2xs">{r.sku}</Num>,
-    },
-    {
-      key: "name",
-      header: t("label.name"),
-      sort: (r) => r.nameAr,
-      search: (r) => `${r.nameAr} ${r.nameTr} ${r.brand} ${r.model} ${r.barcode}`,
-      render: (r) => (
-        <button
-          type="button"
-          onClick={() => openEdit(r)}
-          className="text-start hover:text-accent transition-colors"
-        >
-          <span className={r.active ? "" : "text-muted line-through"}>
-            {localName(r, locale)}
-          </span>
-          {(r.brand || r.model) && (
-            <span className="text-2xs text-faint ms-2">
-              {[r.brand, r.model].filter(Boolean).join(" · ")}
-            </span>
-          )}
-        </button>
-      ),
-    },
-    {
-      key: "category",
-      header: t("label.category"),
-      secondary: true,
-      sort: (r) => categoryPath(categories.find((c) => c.id === r.categoryId), categories, locale),
-      search: (r) => categoryPath(categories.find((c) => c.id === r.categoryId), categories, locale),
-      render: (r) => (
-        <span className="text-muted text-2xs">
-          {categoryPath(categories.find((c) => c.id === r.categoryId), categories, locale)}
-        </span>
-      ),
-    },
-    {
-      key: "onHand",
-      header: t("label.onHand"),
-      align: "end",
-      width: "110px",
-      sort: (r) => onHand[r.id] ?? 0,
-      render: (r) => {
-        const qty = onHand[r.id] ?? 0;
-        const health = stockHealth(qty, r.minStock);
-        return (
-          <Dot tone={health === "out" ? "danger" : health === "low" ? "warn" : "muted"}>
-            <Num className={health === "ok" ? "" : "font-medium"}>
-              {formatNumber(qty, locale)}
-            </Num>
-          </Dot>
-        );
-      },
-    },
-    {
-      key: "cost",
-      header: t("label.cost"),
-      align: "end",
-      width: "110px",
-      tertiary: true,
-      sort: (r) => r.cost,
-      render: (r) => <Num className="text-muted">{money(r.cost)}</Num>,
-    },
-    {
-      key: "price",
-      header: t("label.price"),
-      align: "end",
-      width: "110px",
-      sort: (r) => r.price,
-      render: (r) => <Num className="font-medium">{money(r.price)}</Num>,
-    },
-    {
-      key: "margin",
-      header: t("label.margin"),
-      align: "end",
-      width: "80px",
-      tertiary: true,
-      sort: (r) => (r.price > 0 ? (r.price - r.cost) / r.price : 0),
-      render: (r) => (
-        <Num className="text-muted text-2xs">
-          {r.price > 0 ? `${(((r.price - r.cost) / r.price) * 100).toFixed(0)}%` : "—"}
-        </Num>
-      ),
-    },
-  ];
+  function moveToCategory(item: Item, categoryId: string) {
+    const { id, createdAt, updatedAt, ...rest } = item;
+    void createdAt;
+    void updatedAt;
+    setMovingId(null);
+    startTransition(async () => {
+      const result = await saveItem(id, { ...rest, categoryId: categoryId || null });
+      if (!result.ok) setError(t(result.errorKey as MessageKey));
+    });
+  }
 
-  if (itemType === "spare_part") {
-    columns.splice(3, 0, {
-      key: "fits",
-      header: t("label.fitsMachines"),
-      tertiary: true,
-      search: (r) =>
-        r.fitsItemIds
-          .map((id) => localName(machines.find((m) => m.id === id), locale))
-          .join(" "),
-      render: (r) =>
-        r.fitsItemIds.length === 0 ? (
-          <span className="text-faint text-2xs">—</span>
-        ) : (
-          <span className="text-2xs text-muted truncate block max-w-40">
-            {r.fitsItemIds
-              .map((id) => localName(machines.find((m) => m.id === id), locale))
-              .join("، ")}
-          </span>
-        ),
+  function openNewCategory() {
+    setCategoryForm(blankCategory(itemType));
+    setCategoryError(null);
+    setAddingCategory(true);
+  }
+
+  function submitCategory() {
+    setCategoryError(null);
+    startTransition(async () => {
+      const result = await saveCategory(null, {
+        nameAr: categoryForm.nameAr,
+        nameTr: categoryForm.nameTr,
+        parentId: null,
+        appliesTo: categoryForm.appliesTo,
+        sortOrder: categories.length,
+      });
+      if (result.ok) setAddingCategory(false);
+      else
+        setCategoryError(
+          t(result.errorKey as MessageKey) + (result.detail ? ` — ${result.detail}` : ""),
+        );
     });
   }
 
@@ -269,44 +250,201 @@ export function ItemsClient({
         }
       />
 
-      <DataTable
-        rows={rows}
-        columns={columns}
-        rowKey={(r) => r.id}
-        onRowClick={(r) => setViewing(r)}
-        emptyTitle={t("empty.items")}
-        emptyAction={
-          <Button variant="primary" onClick={openNew}>
-            {newLabel}
-          </Button>
-        }
-        filters={
-          <>
-            <Select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="w-44"
-              aria-label={t("label.category")}
-            >
-              <option value="">{t("label.all")}</option>
-              {usable.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {categoryPath(c, categories, locale)}
-                </option>
-              ))}
-            </Select>
-            <label className="flex items-center gap-1.5 text-2xs text-muted cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showInactive}
-                onChange={(e) => setShowInactive(e.target.checked)}
-                className="accent-[var(--color-accent)]"
-              />
-              {t("label.inactive")}
-            </label>
-          </>
-        }
-      />
+      <Toolbar>
+        <div className="relative flex-1 min-w-40 max-w-72">
+          <IconSearch
+            size={15}
+            className="absolute start-3 top-1/2 -translate-y-1/2 text-faint pointer-events-none"
+          />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("msg.searchPlaceholder")}
+            aria-label={t("action.search")}
+            className="ps-9"
+          />
+        </div>
+        <label className="flex items-center gap-1.5 text-2xs text-muted cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showInactive}
+            onChange={(e) => setShowInactive(e.target.checked)}
+            className="accent-[var(--color-accent)]"
+          />
+          {t("label.inactive")}
+        </label>
+        <Button size="sm" variant="default" onClick={openNewCategory} className="ms-auto">
+          <IconPlus size={14} />
+          {t("page.categories.new")}
+        </Button>
+        <span className="text-2xs text-faint num">
+          {t("msg.rowsCount", { n: visibleItems.length })}
+        </span>
+      </Toolbar>
+
+      <div className="flex flex-col gap-5">
+        {groups.map((group) => (
+          <div
+            key={group.id || "none"}
+            className="border border-line bg-surface rounded-lg shadow-card overflow-hidden min-w-0"
+          >
+            <CardHeader
+              title={group.label}
+              meta={t("msg.rowsCount", { n: group.rows.length })}
+            />
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr className="hairline-b bg-sunken/60">
+                    <th className="h-10 px-4 text-start text-2xs font-medium text-muted hidden md:table-cell w-[100px]">
+                      {t("label.sku")}
+                    </th>
+                    <th className="h-10 px-4 text-start text-2xs font-medium text-muted">
+                      {t("label.name")}
+                    </th>
+                    {itemType === "spare_part" && (
+                      <th className="h-10 px-4 text-start text-2xs font-medium text-muted hidden xl:table-cell">
+                        {t("label.fitsMachines")}
+                      </th>
+                    )}
+                    <th className="h-10 px-4 text-end text-2xs font-medium text-muted w-[90px]">
+                      {t("label.onHand")}
+                    </th>
+                    <th className="h-10 px-4 text-end text-2xs font-medium text-muted hidden xl:table-cell w-[90px]">
+                      {t("label.cost")}
+                    </th>
+                    <th className="h-10 px-4 text-end text-2xs font-medium text-muted w-[100px]">
+                      {t("label.price")}
+                    </th>
+                    <th className="h-10 px-4 text-end text-2xs font-medium text-muted hidden xl:table-cell w-[70px]">
+                      {t("label.margin")}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {group.rows.map((item) => {
+                    const qty = onHand[item.id] ?? 0;
+                    const health = stockHealth(qty, item.minStock);
+                    return (
+                      <tr
+                        key={item.id}
+                        onClick={() => setViewing(item)}
+                        className="hairline-b last:border-b-0 cursor-pointer hover:bg-sunken transition-colors"
+                      >
+                        <td className="py-2.5 px-4 align-middle hidden md:table-cell">
+                          <Num className="text-muted text-2xs">{item.sku}</Num>
+                        </td>
+                        <td className="py-2.5 px-4 align-middle max-w-0">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEdit(item);
+                              }}
+                              className="text-start hover:text-accent transition-colors truncate min-w-0"
+                            >
+                              <span className={item.active ? "" : "text-muted line-through"}>
+                                {localName(item, locale)}
+                              </span>
+                            </button>
+                            {(item.brand || item.model) && (
+                              <span className="text-2xs text-faint truncate shrink-0 hidden sm:inline">
+                                {[item.brand, item.model].filter(Boolean).join(" · ")}
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMovingId(movingId === item.id ? null : item.id);
+                              }}
+                              className="ms-auto shrink-0 text-faint hover:text-accent hover:bg-accent-soft rounded-sm p-1 transition-colors"
+                              aria-label={t("label.moveCategory")}
+                              title={t("label.moveCategory")}
+                            >
+                              <IconTag size={14} />
+                            </button>
+                          </div>
+                          {movingId === item.id && (
+                            <div className="mt-1.5 max-w-56" onClick={(e) => e.stopPropagation()}>
+                              <Select
+                                autoFocus
+                                value={item.categoryId ?? ""}
+                                onChange={(e) => moveToCategory(item, e.target.value)}
+                                onBlur={() => setMovingId(null)}
+                                className="h-8 text-2xs"
+                                aria-label={t("label.moveCategory")}
+                              >
+                                <option value="">{t("label.uncategorized")}</option>
+                                {orderedCategories.map((c) => (
+                                  <option key={c.id} value={c.id}>
+                                    {categoryPath(c, categories, locale)}
+                                  </option>
+                                ))}
+                              </Select>
+                            </div>
+                          )}
+                        </td>
+                        {itemType === "spare_part" && (
+                          <td className="py-2.5 px-4 align-middle hidden xl:table-cell">
+                            {item.fitsItemIds.length === 0 ? (
+                              <span className="text-faint text-2xs">—</span>
+                            ) : (
+                              <span className="text-2xs text-muted truncate block max-w-40">
+                                {item.fitsItemIds
+                                  .map((id) => localName(machines.find((m) => m.id === id), locale))
+                                  .join("، ")}
+                              </span>
+                            )}
+                          </td>
+                        )}
+                        <td className="py-2.5 px-4 align-middle text-end">
+                          <Dot tone={health === "out" ? "danger" : health === "low" ? "warn" : "muted"}>
+                            <Num className={health === "ok" ? "" : "font-medium"}>
+                              {formatNumber(qty, locale)}
+                            </Num>
+                          </Dot>
+                        </td>
+                        <td className="py-2.5 px-4 align-middle text-end hidden xl:table-cell">
+                          <Num className="text-muted">{money(item.cost)}</Num>
+                        </td>
+                        <td className="py-2.5 px-4 align-middle text-end">
+                          <Num className="font-medium">{money(item.price)}</Num>
+                        </td>
+                        <td className="py-2.5 px-4 align-middle text-end hidden xl:table-cell">
+                          <Num className="text-muted text-2xs">
+                            {item.price > 0
+                              ? `${(((item.price - item.cost) / item.price) * 100).toFixed(0)}%`
+                              : "—"}
+                          </Num>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+
+        {groups.length === 0 && (
+          <div className="border border-line bg-surface rounded-lg shadow-card">
+            <EmptyState
+              compact
+              title={query ? t("empty.noResults") : t("empty.items")}
+              hint={query ? t("empty.noResultsHint") : undefined}
+              action={
+                !query && (
+                  <Button variant="primary" onClick={openNew}>
+                    {newLabel}
+                  </Button>
+                )
+              }
+            />
+          </div>
+        )}
+      </div>
 
       <Modal
         open={open}
@@ -499,6 +637,57 @@ export function ItemsClient({
         </div>
 
         {error && <p className="text-2xs text-danger mt-3">{error}</p>}
+      </Modal>
+
+      <Modal
+        open={addingCategory}
+        onClose={() => setAddingCategory(false)}
+        title={t("page.categories.new")}
+        width="sm"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setAddingCategory(false)} disabled={pending}>
+              {t("action.cancel")}
+            </Button>
+            <Button variant="primary" onClick={submitCategory} disabled={pending}>
+              {t("action.save")}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <Field label={t("label.nameAr")} required>
+            <Input
+              value={categoryForm.nameAr}
+              onChange={(e) => setCategoryForm({ ...categoryForm, nameAr: e.target.value })}
+              autoFocus
+            />
+          </Field>
+          <Field label={t("label.nameTr")} hint={t("label.optional")}>
+            <Input
+              value={categoryForm.nameTr}
+              onChange={(e) => setCategoryForm({ ...categoryForm, nameTr: e.target.value })}
+              dir="ltr"
+              className="text-start"
+            />
+          </Field>
+          <Field label={t("page.categories.scope")}>
+            <Select
+              value={categoryForm.appliesTo}
+              onChange={(e) =>
+                setCategoryForm({ ...categoryForm, appliesTo: e.target.value as CategoryScope })
+              }
+            >
+              {SCOPES.map((s) => (
+                <option key={s} value={s}>
+                  {t(`scope.${s}` as MessageKey)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+
+        {categoryError && <p className="text-2xs text-danger mt-3">{categoryError}</p>}
       </Modal>
 
       <Confirm

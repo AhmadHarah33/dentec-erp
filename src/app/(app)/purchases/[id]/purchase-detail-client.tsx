@@ -11,6 +11,7 @@ import { today, formatDate, formatDateTime } from "@/lib/dates";
 import { DetailRow, EmptyState } from "@/components/ui/page";
 import { Badge, Card, CardHeader, Num, LinkButton, Button } from "@/components/ui/primitives";
 import { Confirm } from "@/components/ui/modal";
+import { DownloadPdfButton } from "@/components/app/download-pdf";
 
 export function PurchaseDetailClient({
   order,
@@ -81,6 +82,7 @@ export function PurchaseDetailClient({
         </div>
         <div className="flex items-center gap-2 shrink-0 no-print">
           <LinkButton href="/purchases">{t("action.back")}</LinkButton>
+          <DownloadPdfButton kind="purchases" id={order.id} />
           {canReceive && (
             <Button
               variant="primary"

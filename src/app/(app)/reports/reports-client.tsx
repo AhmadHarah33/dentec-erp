@@ -8,7 +8,7 @@ import { IconChart, IconCoins, IconDocument } from "@/components/ui/icons";
 import { formatMonth, today, daysBetween, addDays } from "@/lib/dates";
 import { salesByMonth, salesByItem, salesByCustomer, invoiceTotalBase, isLive } from "@/lib/queries";
 import { localName } from "@/lib/labels";
-import { PageHeader, StatTile, EmptyState } from "@/components/ui/page";
+import { PageHeader, StatTile, Toolbar, EmptyState } from "@/components/ui/page";
 import {
   Card,
   CardHeader,
@@ -17,7 +17,10 @@ import {
   Num,
 } from "@/components/ui/primitives";
 import { LineChart, BarList } from "@/components/ui/charts";
+import { IconCart } from "@/components/ui/icons";
 import type { MessageKey } from "@/lib/i18n";
+import { countedPhrase } from "@/lib/plural";
+import type { Locale } from "@/lib/i18n";
 
 interface ReportsClientProps {
   invoices: SalesInvoice[];
@@ -26,7 +29,7 @@ interface ReportsClientProps {
   stock: Record<string, number>;
   lastMoveDate: Record<string, string>;
   currency: CurrencyCode;
-  locale: string;
+  locale: Locale;
 }
 
 type QuickRange = "thisMonth" | "last3Months" | "thisYear" | "allTime";
@@ -162,102 +165,91 @@ export function ReportsClient({
         subtitle={t("page.reports.subtitle")}
       />
 
-      {/* Date Range Controls */}
-      <Card className="mb-4">
-        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
-          <div>
-            <label className="block text-2xs font-semibold text-muted mb-1.5">
-              {t("label.date")}
-            </label>
-            <Input
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="text-xs"
-            />
-          </div>
-          <div>
-            <label className="block text-2xs font-semibold text-muted mb-1.5">
-              {t("label.dueDate")}
-            </label>
-            <Input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              className="text-xs"
-            />
-          </div>
-          <div className="lg:col-span-3">
-            <label className="block text-2xs font-semibold text-muted mb-1.5">
-              {t("action.filter")}
-            </label>
-            {/* Four mutually exclusive ranges, and the current one should stay
-                visible — that is a segmented control, not a dropdown. */}
-            <Segmented<QuickRange>
-              value={quickRange}
-              onChange={handleQuickRange}
-              ariaLabel={t("action.filter")}
-              options={[
-                { value: "thisMonth", label: t("report.thisMonth" as MessageKey) },
-                { value: "last3Months", label: t("report.last3Months" as MessageKey) },
-                { value: "thisYear", label: t("report.thisYear" as MessageKey) },
-                { value: "allTime", label: t("report.allTime" as MessageKey) },
-              ]}
-            />
-          </div>
-        </div>
-      </Card>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatTile
+          label={t("report.revenue")}
+          value={formatMoneyCompact(salesData.totalRevenue, currency, locale)}
+          icon={IconCoins}
+          tone="success"
+        />
+        <StatTile
+          label={t("report.grossProfit")}
+          value={formatMoneyCompact(salesData.totalProfit, currency, locale)}
+          icon={IconChart}
+          meta={`${fmt(salesData.grossMargin, 1)}%`}
+          tone={salesData.totalProfit > 0 ? "success" : "danger"}
+          chip={salesData.totalProfit > 0 ? t("dash.tileGood") : t("dash.tileBad")}
+        />
+        <StatTile
+          label={t("page.invoices.title")}
+          value={fmt(salesData.invoiceCount, 0)}
+          icon={IconDocument}
+        />
+        <StatTile
+          label={t("report.avgInvoice")}
+          value={formatMoneyCompact(salesData.avgInvoice, currency, locale)}
+          icon={IconCart}
+        />
+      </div>
 
+      <Toolbar>
+        {/* Four mutually exclusive ranges, and the current one should stay
+            visible — that is a segmented control, not a dropdown. */}
+        <Segmented<QuickRange>
+          value={quickRange}
+          onChange={handleQuickRange}
+          ariaLabel={t("action.filter")}
+          options={[
+            { value: "thisMonth", label: t("report.thisMonth" as MessageKey) },
+            { value: "last3Months", label: t("report.last3Months" as MessageKey) },
+            { value: "thisYear", label: t("report.thisYear" as MessageKey) },
+            { value: "allTime", label: t("report.allTime" as MessageKey) },
+          ]}
+        />
+        <div className="flex items-center gap-2 ms-auto">
+          <Input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            dir="ltr"
+            aria-label={t("label.date")}
+            className="w-36"
+          />
+          <span className="text-faint text-2xs shrink-0">–</span>
+          <Input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            dir="ltr"
+            aria-label={t("label.dueDate")}
+            className="w-36"
+          />
+        </div>
+      </Toolbar>
+
+      <div className="flex flex-col gap-5">
       {/* 1. Sales by Month */}
-      <Card className="mb-4">
+      <Card>
         <CardHeader title={t("report.salesByMonth")} />
         <div className="p-3">
           {salesData.months.length === 0 ? (
             <EmptyState compact title={t("empty.invoices")} />
           ) : (
-            <>
-              <LineChart
-                points={salesData.months.map((p) => ({
-                  label: formatMonth(p.month, locale),
-                  value: p.sales,
-                  meta: t("dash.fromInvoices", { n: p.count }),
-                }))}
-                currency={currency}
-                locale={locale}
-              />
-              <div className="grid grid-cols-3 gap-2 mt-4">
-                <div className="border border-line bg-surface rounded-sm p-2">
-                  <div className="text-2xs text-muted mb-1">
-                    {t("report.revenue")}
-                  </div>
-                  <div className="text-sm font-semibold">
-                    <Num>{money(salesData.totalRevenue)}</Num>
-                  </div>
-                </div>
-                <div className="border border-line bg-surface rounded-sm p-2">
-                  <div className="text-2xs text-muted mb-1">
-                    {t("label.quantity")}
-                  </div>
-                  <div className="text-sm font-semibold">
-                    <Num>{fmt(salesData.invoiceCount, 0)}</Num>
-                  </div>
-                </div>
-                <div className="border border-line bg-surface rounded-sm p-2">
-                  <div className="text-2xs text-muted mb-1">
-                    {t("label.amount")}
-                  </div>
-                  <div className="text-sm font-semibold">
-                    <Num>{money(salesData.avgInvoice)}</Num>
-                  </div>
-                </div>
-              </div>
-            </>
+            <LineChart
+              points={salesData.months.map((p) => ({
+                label: formatMonth(p.month, locale),
+                value: p.sales,
+                meta: t("dash.fromInvoices", { d: countedPhrase(locale, "invoice", p.count) }),
+              }))}
+              currency={currency}
+              locale={locale}
+            />
           )}
         </div>
       </Card>
 
       {/* 2. Sales by Item */}
-      <Card className="mb-4">
+      <Card>
         <CardHeader title={t("report.salesByItem")} />
         <div className="overflow-x-auto">
           {salesData.items.length === 0 ? (
@@ -381,7 +373,7 @@ export function ReportsClient({
       </Card>
 
       {/* 3. Sales by Customer */}
-      <Card className="mb-4">
+      <Card>
         <CardHeader title={t("report.salesByCustomer")} />
         <div className="p-3">
           {salesData.customers.length === 0 ? (
@@ -446,34 +438,8 @@ export function ReportsClient({
         </div>
       </Card>
 
-      {/* 4. Profit Margin */}
-      <Card className="mb-4">
-        <CardHeader title={t("report.profitMargin")} />
-        <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <StatTile
-            label={t("report.revenue")}
-            value={formatMoneyCompact(salesData.totalRevenue, currency, locale)}
-            icon={IconCoins}
-            tone="success"
-          />
-          <StatTile
-            label={t("report.cogs")}
-            value={formatMoneyCompact(salesData.totalCost, currency, locale)}
-            icon={IconDocument}
-          />
-          <StatTile
-            label={t("report.grossProfit")}
-            value={formatMoneyCompact(salesData.totalProfit, currency, locale)}
-            icon={IconChart}
-            meta={`${fmt(salesData.grossMargin, 1)}%`}
-            tone={salesData.totalProfit > 0 ? "success" : "danger"}
-            chip={salesData.totalProfit > 0 ? t("dash.tileGood") : t("dash.tileBad")}
-          />
-        </div>
-      </Card>
-
-      {/* 5. Stock Valuation */}
-      <Card className="mb-4">
+      {/* 4. Stock Valuation */}
+      <Card>
         <CardHeader title={t("report.stockValuation")} />
         <div className="overflow-x-auto">
           {stockValuation.length === 0 ? (
@@ -547,7 +513,7 @@ export function ReportsClient({
         </div>
       </Card>
 
-      {/* 6. Slow Movers */}
+      {/* 5. Slow Movers */}
       <Card>
         <CardHeader title={t("report.slowMovers")} />
         <div className="overflow-x-auto">
@@ -570,7 +536,7 @@ export function ReportsClient({
                     {t("label.total")}
                   </th>
                   <th className="px-3 text-end font-medium w-32">
-                    {t("report.noMovement")}
+                    {t("report.noMovementDays")}
                   </th>
                 </tr>
               </thead>
@@ -591,7 +557,9 @@ export function ReportsClient({
                       <Num>{money(row.value)}</Num>
                     </td>
                     <td className="px-3 text-end">
-                      <Num>{fmt(row.days, 0)}</Num> {t("report.days")}
+                      {/* Bare figures: the unit is in the header, which keeps
+                          the column aligned and sidesteps Arabic agreement. */}
+                      <Num>{fmt(row.days, 0)}</Num>
                     </td>
                   </tr>
                 ))}
@@ -600,6 +568,7 @@ export function ReportsClient({
           )}
         </div>
       </Card>
+      </div>
     </>
   );
 }

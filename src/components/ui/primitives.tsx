@@ -16,8 +16,8 @@ type ButtonSize = "sm" | "md";
 
 const BUTTON_BASE =
   "inline-flex items-center justify-center gap-2 rounded-sm border font-medium " +
-  "transition-colors duration-150 select-none whitespace-nowrap " +
-  "disabled:opacity-40 disabled:pointer-events-none";
+  "transition-[background-color,border-color,color,transform] duration-[var(--dur-swift)] select-none whitespace-nowrap " +
+  "active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none disabled:active:scale-100";
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   primary:

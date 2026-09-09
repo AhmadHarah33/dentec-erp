@@ -34,6 +34,8 @@ import {
 } from "@/components/ui/primitives";
 import { Modal, Confirm } from "@/components/ui/modal";
 import { IconPrint } from "@/components/ui/icons";
+import { DownloadPdfButton } from "@/components/app/download-pdf";
+import { InvoiceBilling } from "@/components/app/invoice-billing";
 
 interface LineItem {
   id: string;
@@ -120,6 +122,7 @@ export function InvoiceDetailClient({
               <IconPrint />
               {t("action.print")}
             </Button>
+            <DownloadPdfButton kind="invoices" id={invoice.id} />
             {isDraft && (
               <Button variant="primary" onClick={() => setConfirming("issue")}>
                 {t("action.issue")}
@@ -339,6 +342,8 @@ export function InvoiceDetailClient({
           </div>
 
           <div className="flex flex-col gap-4 no-print">
+            <InvoiceBilling invoice={invoice} customer={customer} />
+
             <Card>
               <CardHeader title={t("label.description")} />
               <div className="px-3 py-1 divide-y divide-line">

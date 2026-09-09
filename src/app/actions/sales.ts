@@ -2,7 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { create, remove, snapshot, transaction, update } from "@/lib/data/repository";
-import type { DocumentLine, SalesInvoice } from "@/lib/data/types";
+import type {
+  BillingRegion,
+  DispatchInfo,
+  DocumentLine,
+  InvoiceDocumentType,
+  SalesInvoice,
+} from "@/lib/data/types";
+import { needsDispatch, normalisePlate } from "@/lib/billing/region";
 import { buildStockIndex, onHand } from "@/lib/stock";
 import { computeTotals, round2, toBase } from "@/lib/money";
 import { paidForInvoice } from "@/lib/queries";
@@ -81,6 +88,54 @@ export async function saveInvoice(
  * check and the ledger writes happen in one transaction, so two people issuing
  * the last unit at once cannot both succeed.
  */
+/**
+ * Set the regime and document type on one invoice.
+ *
+ * Kept apart from `saveInvoice` on purpose: the lines of an issued invoice are
+ * frozen, but which GİB document it is filed as can still need correcting —
+ * a buyer joins the e-Fatura user list, or a shipment turns out to need an
+ * e-İrsaliye. This is the one thing editable after issue.
+ */
+export async function setInvoiceBilling(
+  id: string,
+  input: {
+    billingRegion: BillingRegion;
+    documentType: InvoiceDocumentType;
+    dispatch?: DispatchInfo;
+    localCurrency?: SalesInvoice["localCurrency"];
+    localRate?: number;
+  },
+): Promise<Result> {
+  const db = await snapshot();
+  const invoice = db.salesInvoices.find((i) => i.id === id);
+  if (!invoice) return fail("msg.error", "not-found");
+  if (invoice.status === "void") return fail("msg.error", "void");
+
+  // A dispatch note without a plate and a driver is not a dispatch note; the
+  // integrator would reject it, so it is refused here instead.
+  if (needsDispatch(input.documentType)) {
+    const d = input.dispatch;
+    if (!d?.vehiclePlate?.trim() || !d?.driverName?.trim()) {
+      return fail("compliance.missingDispatch");
+    }
+  }
+
+  const dispatch = input.dispatch
+    ? { ...input.dispatch, vehiclePlate: normalisePlate(input.dispatch.vehiclePlate) }
+    : undefined;
+
+  await update("salesInvoices", id, {
+    billingRegion: input.billingRegion,
+    documentType: input.documentType,
+    dispatch,
+    localCurrency: input.localCurrency,
+    localRate: input.localRate,
+  });
+
+  refresh(id);
+  return ok(undefined);
+}
+
 export async function issueInvoice(id: string): Promise<Result> {
   const db = await snapshot();
   const invoice = db.salesInvoices.find((i) => i.id === id);

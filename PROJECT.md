@@ -1,6 +1,6 @@
 # Project state
 
-Last updated: 2026-09-04
+Last updated: 2026-09-08
 
 ## What this is
 
@@ -124,6 +124,110 @@ optional, so existing rows stay valid.
 Testing those flows left three records in the demo data: INV-2026-0080,
 PO-2026-0017, and an extra part on SRV-2026-0017. Settings → reset demo data
 clears them.
+
+## Dual-region billing and PDF — 2026-09-08
+
+### The route "403" was not a route problem
+
+Reported symptom: `/products`, `/spare-parts` and `/service/srv19` return 403
+or are otherwise unreachable. Probed rather than guessed, and the app is not
+the thing refusing.
+
+There is no `middleware.ts`, no `vercel.json`, and `next.config.mjs` has no
+`rewrites`, `redirects`, `headers` or `basePath`. Nothing in `src/` returns 403
+— `grep` finds only `notFound()` and one `redirect()` on a non-draft invoice
+edit. Locally every route answers 200:
+
+```
+200  /   200  /products   200  /spare-parts   200  /service   200  /invoices
+404  /service/srv19
+```
+
+That 404 is correct. Service ids are `"srv" + n` assigned in seed order, and
+the seed writes 17 jobs, so `srv19` has never existed. The count is not fixed
+either: `buildSeed()` skips any generated date later than today, so the number
+of jobs drifts as the calendar moves, and an id that resolved last month can
+404 this month. On Vercel it is worse — each cold instance re-seeds its own
+in-memory copy, so a detail URL is only valid against the instance that minted
+it.
+
+**So a 403 reaching the browser is coming from in front of the app** — the
+Cloudflare tunnel, or Vercel Deployment Protection on a preview URL. That is
+where to look; there is no code fix, and none was made.
+
+### Regions
+
+`billingRegion: "TR" | "SY"` now sits on both the customer and the invoice.
+Both are optional, so rows written before this stay valid, and
+`resolveRegion()` in `src/lib/billing/region.ts` is the single place the "an
+unmarked party is domestic" assumption is made. The invoice carries its own
+copy and freezes it: re-domiciling a customer must not rewrite invoices
+already issued to them.
+
+- **TR** (`turkey` profile): VKN/TCKN with real check-digit validation, Vergi
+  Dairesi, Ticaret Sicil No, GİB mailbox alias, Mersis. Document type is
+  *derived, not chosen* — a buyer in the GİB e-Fatura user list must receive an
+  `e_fatura` and one outside it an `e_arsiv`; sending the wrong one gets the
+  document rejected. `e_irsaliye` carries a dispatch block and is the only type
+  that needs one.
+- **SY** (`syria` profile): commercial register, import licence, customs post,
+  exemption wording. Export sales are zero-rated at origin, priced in USD/EUR,
+  and the total is restated in a second currency at a stated rate.
+
+`complianceIssues()` returns every gap in one pass rather than throwing on the
+first, so the invoice page lists them all at once. `buildUblPayload()` produces
+the UBL-TR 1.2 tree — `Invoice` for e-Fatura/e-Arşiv, `DespatchAdvice` for
+e-İrsaliye — named as UBL names it and stopping there. No XML, no credentials,
+no network: the transport is the integrator's problem (Uyumsoft / Logo /
+Foriba) and swapping between them should not reach past that one file.
+
+### PDF: HTML through a real browser
+
+`@react-pdf/renderer` was considered and rejected. This document is Arabic
+first, and Arabic needs contextual glyph shaping plus bidi reordering of the
+Latin SKUs and figures embedded in it. Chromium already does both, correctly,
+with the Cairo webfont the app is already set in. Playwright renders
+`/print/[kind]/[id]` — a server component with no app shell — and
+`/api/{invoices,purchases}/[id]/pdf` streams the result back. The browser is
+cached on `globalThis` for the same reason the store is.
+
+Verified: Cairo embeds as CID subsets, Arabic joins correctly, and the TR,
+SY, e-İrsaliye and purchase-order variants all render.
+
+### Bugs found while building this
+
+1. **The VKN check digit was off by one.** Positions in the GİB algorithm are
+   1-based and the offset is `10 - position`, so the leftmost digit shifts by
+   9, not 10. The first draft used the loop index directly. It produced
+   plausible numbers that every real system rejects, and nothing on screen
+   would have shown it — `npm run check` exists because of this. Worth knowing:
+   the algorithm collapses two intermediate values onto 9, so it catches ~98 %
+   of single-digit typos, not all of them. It is a screen against fat fingers,
+   not proof the number is real.
+2. **`"منذ 2 يومين"`.** The first pass at pluralisation interpolated the
+   numeral and the noun separately. But Arabic's singular and dual *already*
+   carry their count — "يومين" is "two days" — so writing the digit too reads
+   as "two two-days". `countedPhrase()` returns the whole phrase and omits the
+   numeral for 1 and 2. Turkish keeps its numeral always.
+3. **Mixed-script identifiers reordered on the printed sheet.** A plate
+   "34 ABC 123" came out "ABC 123 34" and a phone "+90 553 636 2468" came out
+   "2468 636 553 90+": digits and Latin letters form separate bidi runs inside
+   an Arabic paragraph. Identifier fields are LTR-isolated (`.num`) now; prose
+   deliberately is not.
+4. **A purchase order was printing a Turkish VKN block for a Chinese
+   supplier**, and Dentec's customer warranty terms. A PO has no region of its
+   own — it gets the plain tax number, and no warranty.
+
+### Note when pulling this
+
+`data/dentec.json` predates these fields. Settings → reset demo data
+regenerates it with regions, tax profiles and the bank/IBAN footer; without
+that, existing rows simply fall back to TR and the footer rows stay blank —
+valid, just not showing the new work.
+
+Playwright's Chromium must be present: `npx playwright install chromium`.
+Without it the PDF route returns a JSON error saying so rather than a broken
+download.
 
 ## Bugs found and fixed (context for future work)
 

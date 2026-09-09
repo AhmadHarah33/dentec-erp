@@ -77,8 +77,8 @@ export function RoleSwitcher({ variant = "compact" }: { variant?: "compact" | "b
         <div
           role="menu"
           className={cn(
-            "anim-pop absolute z-40 bg-surface border border-line rounded-lg shadow-pop overflow-hidden",
-            block ? "bottom-full end-0 start-0 mb-2" : "top-full end-0 mt-2 w-56",
+            "absolute z-40 bg-surface border border-line rounded-lg shadow-pop overflow-hidden",
+            block ? "anim-pop bottom-full end-0 start-0 mb-2" : "anim-pop-end top-full end-0 mt-2 w-56",
           )}
         >
           <p className="px-4 pt-3 pb-2 text-2xs text-faint leading-snug">

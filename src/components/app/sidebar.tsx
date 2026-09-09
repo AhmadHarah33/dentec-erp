@@ -33,11 +33,11 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
   }
 
   return (
-    <nav className="flex flex-col gap-1 py-4">
+    <nav className="flex flex-col py-2 divide-y divide-line/60">
       {NAV.map((group) => {
         const open = group.titleKey === currentGroup || opened.includes(group.titleKey);
         return (
-        <div key={group.titleKey}>
+        <div key={group.titleKey} className="py-2 first:pt-0 last:pb-0">
           <button
             type="button"
             onClick={() => toggle(group.titleKey)}
@@ -80,20 +80,24 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-function Wordmark() {
+/**
+ * The wordmark itself, SVG first since every browser in use renders it; the
+ * PNG only covers a `<picture>` source that can't decode SVG at all.
+ */
+export function Logo({ className }: { className?: string }) {
   const t = useT();
   return (
-    <Link href="/" className="flex items-center gap-2.5 h-16 px-6 hairline-b shrink-0">
-      {/* A tooth in outline — the one piece of ornament in the whole interface. */}
-      <svg width="20" height="20" viewBox="0 0 16 16" fill="none" aria-hidden="true" className="shrink-0">
-        <path
-          d="M4.2 2.2C2.6 2.2 1.8 3.6 1.9 5.3c.1 1.9.7 2.7 1 4.4.3 1.6.2 4.1 1.4 4.1 1.1 0 1-2.2 1.4-3.5.2-.8.6-1.2 1.3-1.2s1.1.4 1.3 1.2c.4 1.3.3 3.5 1.4 3.5 1.2 0 1.1-2.5 1.4-4.1.3-1.7.9-2.5 1-4.4.1-1.7-.7-3.1-2.3-3.1-1.1 0-1.7.5-2.8.5s-1.7-.5-2.8-.5Z"
-          stroke="var(--color-accent)"
-          strokeWidth="1.2"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <span className="text-sm font-bold tracking-tight text-accent">{t("app.name")}</span>
+    <picture>
+      <source srcSet="/logo.svg" type="image/svg+xml" />
+      <img src="/logo.png" alt={t("app.name")} className={cn("w-auto", className)} />
+    </picture>
+  );
+}
+
+function Wordmark() {
+  return (
+    <Link href="/" className="flex items-center h-16 px-6 hairline-b shrink-0">
+      <Logo className="h-7" />
     </Link>
   );
 }
@@ -171,7 +175,7 @@ export function MobileNav() {
       <div className="anim-slide-start absolute inset-y-0 start-0 w-72 max-w-[85vw] bg-surface border-e border-line shadow-modal flex flex-col">
         {/* Padded clear of the toggle, which sits over this corner. */}
         <div className="flex items-center h-16 ps-14 pe-6 hairline-b shrink-0">
-          <span className="text-sm font-bold tracking-tight text-accent">{t("app.name")}</span>
+          <Logo className="h-7" />
         </div>
         <div className="overflow-y-auto flex-1">
           <NavList onNavigate={() => setOpen(false)} />

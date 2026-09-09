@@ -6,10 +6,13 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
-    "lint": "next lint"
+    "lint": "next lint",
+    "check": "tsc --outDir .check-out --skipLibCheck --module commonjs --target es2022 --moduleResolution node --strict false --esModuleInterop scripts/check-billing.ts && node .check-out/scripts/check-billing.js"
   },
   "dependencies": {
     "next": "^15.5.25",
+    "playwright": "^1.63.0",
+    "playwright-core": "^1.63.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

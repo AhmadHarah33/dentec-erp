@@ -101,6 +101,13 @@ export const IconPrint = (p: IconProps) => (
   </Icon>
 );
 
+export const IconDownload = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M8 2.5v7.5M5 7.25 8 10.25l3-3" />
+    <path d="M2.75 11.5v1a1 1 0 0 0 1 1h8.5a1 1 0 0 0 1-1v-1" />
+  </Icon>
+);
+
 export const IconAlert = (p: IconProps) => (
   <Icon {...p}>
     <path d="M8 2.5 14.5 13.5h-13z" />

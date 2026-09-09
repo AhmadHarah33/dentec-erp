@@ -216,10 +216,11 @@ reuse existing keys. If you genuinely need a new key, add it to `ar.ts` (and onl
   and hairline borders still carry most of the separation.
 - Radius: `rounded-lg` (12px) for cards, tables and dialogs, `rounded-sm` (8px)
   for controls, buttons and sidebar items, `rounded-full` for badges and pills.
-- **Two brand colours, and they do different jobs.** `text-brand` (`#1b2350`,
-  straight off the logo) is the wordmark and nothing else. `accent`
-  (`#2f5bd8`) is the voice: filled buttons, active navigation, links and chart
-  data. `accent-strong` is its hover, `accent-soft` its tint.
+- **Two brand colours, both the same navy off the logo, and they do different
+  jobs.** `text-brand` (`#1b2350`, straight off the logo) is the wordmark and
+  nothing else. `accent` (`#1a224d`, also straight off the logo) is the
+  voice: filled buttons, active navigation, links and chart data.
+  `accent-strong` is its hover, `accent-soft` its tint.
 - **Status colour is information, not decoration.** Every state maps to a
   `Tone`: `accent` in progress, `success` finished and correct, `warn` needs a
   look, `danger` wrong, `muted` inactive, `neutral` otherwise. The maps live in

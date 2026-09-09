@@ -26,6 +26,7 @@ import type {
   User,
   Warehouse,
 } from "./types";
+import { vknCheckDigit } from "../billing/region";
 
 /* ------------------------------------------------------------------ */
 /* Deterministic randomness — same seed every time, so bug reports     */
@@ -93,6 +94,15 @@ export function buildSeed(): Database {
     invoicePrefix: "INV",
     purchasePrefix: "PO",
     servicePrefix: "SRV",
+    bankName: "Türkiye İş Bankası",
+    bankAccountName: "Dentec Medikal Ekipman Ltd. Şti.",
+    iban: "TR33 0006 1005 1978 6457 8413 26",
+    swift: "ISBKTRIS",
+    warrantyTerms:
+      "ضمان المصنّع لمدة اثني عشر شهراً من تاريخ التسليم، لا يشمل سوء الاستخدام أو قطع التآكل.",
+    taxOffice: "Beyoğlu Vergi Dairesi",
+    tradeRegistryNo: "204871-5",
+    mersisNo: "0382019947100015",
     updatedAt: nowISO,
   };
 
@@ -279,6 +289,53 @@ export function buildSeed(): Database {
     ["مستشفى الأمل الجامعي", "حمص", "hospital", "الإنشاءات — طريق حماة"],
   ];
 
+  /* Turkish cities decide the billing regime: a buyer in Istanbul is billed
+     under TR e-transformation, a buyer in Damascus gets an export invoice.
+     Beirut is not Türkiye either, so it takes the export path too. */
+  const TR_CITIES = new Set(["إسطنبول", "أنقرة", "بورصة", "إزمير"]);
+  const TAX_OFFICES = ["Beyoğlu", "Kadıköy", "Çankaya", "Konak", "Osmangazi"];
+
+  /**
+   * A VKN with a correct check digit, so seeded customers pass validation.
+   * The digit comes from the same function the validator uses — two copies of
+   * this arithmetic would eventually disagree, and the seed would quietly
+   * start producing numbers the app rejects.
+   */
+  function makeVkn(): string {
+    const first9 = Array.from({ length: 9 }, () => int(0, 9)).join("");
+    return first9 + String(vknCheckDigit(first9));
+  }
+
+  function regionalProfile(city: string, i: number): Partial<Customer> {
+    if (TR_CITIES.has(city)) {
+      const vkn = makeVkn();
+      // Roughly two thirds of Turkish buyers are registered e-Fatura users;
+      // the rest have to receive an e-Arşiv instead.
+      const eInvoiceUser = i % 3 !== 0;
+      return {
+        billingRegion: "TR",
+        turkey: {
+          taxIdKind: "vkn",
+          taxId: vkn,
+          taxOffice: pick(TAX_OFFICES) + " Vergi Dairesi",
+          tradeRegistryNo: String(int(100000, 999999)) + "-" + int(1, 9),
+          gibAlias: eInvoiceUser ? `urn:mail:defaultpk@${vkn}.com.tr` : "",
+          eInvoiceUser,
+          mersisNo: "0" + vkn + String(int(10000, 99999)),
+        },
+      };
+    }
+    return {
+      billingRegion: "SY",
+      syria: {
+        commercialRegisterNo: String(int(10000, 99999)) + "/أ",
+        importLicenseNo: int(2024, 2026) + "-" + int(1000, 9999),
+        customsOffice: pick(["معبر باب الهوى", "معبر نصيب", "معبر كسب"]),
+        exemptionNote: "",
+      },
+    };
+  }
+
   const customers: Customer[] = customerDefs.map((d, i) => ({
     ...stamp("cu" + (i + 1)),
     code: "C-" + String(1001 + i),
@@ -293,6 +350,7 @@ export function buildSeed(): Database {
     creditLimit: pick([0, 5000, 10000, 15000, 25000]),
     notes: "",
     active: true,
+    ...regionalProfile(d[1], i),
   }));
 
   const supplierDefs: [string, string, string][] = [
@@ -476,6 +534,11 @@ export function buildSeed(): Database {
       if (date > dayISO(NOW)) continue;
 
       const id = "inv" + ++invSeq;
+      // The regime is frozen onto the document, not read back off the
+      // customer — re-domiciling a buyer must not rewrite their history.
+      const region = customer.billingRegion ?? "TR";
+      // Exports are zero-rated at origin; domestic sales carry a KDV band.
+      const kdv = region === "SY" ? 0 : pick([20, 20, 20, 10, 1]);
       const lineCount = int(1, 4);
       const lines = Array.from({ length: lineCount }, (_, li) => {
         const it = pick(rnd() > 0.55 ? products : parts);
@@ -486,15 +549,17 @@ export function buildSeed(): Database {
           qty: it.itemType === "product" ? int(1, 2) : int(1, 8),
           unitPrice: it.price,
           discountPercent: rnd() > 0.75 ? pick([5, 10]) : 0,
-          taxRate: settings.defaultTaxRate,
+          taxRate: kdv,
         };
       });
 
-      // A few invoices are billed in Turkish lira — the multi-currency path
-      // needs real rows exercising it, not just a settings screen.
-      const useTRY = rnd() > 0.82;
-      const currency = useTRY ? ("TRY" as const) : ("USD" as const);
-      const fxRate = useTRY ? 0.029 : 1;
+      // Multi-currency needs real rows exercising it, not just a settings
+      // screen. Turkish invoices are sometimes in lira; Syrian exports are
+      // always hard currency, occasionally euro.
+      const useTRY = region === "TR" && rnd() > 0.82;
+      const useEUR = region === "SY" && rnd() > 0.75;
+      const currency = useTRY ? ("TRY" as const) : useEUR ? ("EUR" as const) : ("USD" as const);
+      const fxRate = useTRY ? 0.029 : useEUR ? 1.08 : 1;
       if (useTRY) {
         for (const l of lines) l.unitPrice = Math.round(l.unitPrice / fxRate);
       }
@@ -529,6 +594,17 @@ export function buildSeed(): Database {
         lines,
         notes: "",
         issuedAt: isDraft ? null : new Date(date + "T12:00:00Z").toISOString(),
+        billingRegion: region,
+        documentType:
+          region === "SY"
+            ? "export"
+            : customer.turkey?.eInvoiceUser
+              ? "e_fatura"
+              : "e_arsiv",
+        // An export invoice restates its total for the buyer's customs broker.
+        ...(region === "SY"
+          ? { localCurrency: "SYP" as const, localRate: 13000 }
+          : {}),
       });
 
       if (isDraft) continue;

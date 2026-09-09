@@ -9,3 +9,10 @@ next-env.d.ts
 # src/lib/data/seed.ts on first run. Anchored with a leading slash: a bare
 # "data/" also matches src/lib/data/, which is source.
 /data/
+
+# Compiled output of `npm run check` — regenerated on every run.
+/.check-out/
+
+# Per-session state written by the `headroom wrap claude` launcher.
+/.claude/.headroom_wrap_*.json
+/.claude/.headroom_wrap_settings.lock

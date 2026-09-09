@@ -50,7 +50,7 @@ export function QuickCreate() {
       {open && (
         <div
           role="menu"
-          className="anim-pop absolute top-full end-0 mt-2 w-52 bg-surface border border-line rounded-lg shadow-pop overflow-hidden z-40"
+          className="anim-pop-end absolute top-full end-0 mt-2 w-52 bg-surface border border-line rounded-lg shadow-pop overflow-hidden z-40"
         >
           {ITEMS.map((item) => (
             <Link

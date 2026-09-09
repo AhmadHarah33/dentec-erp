@@ -95,6 +95,47 @@ export function computeTotals(
   };
 }
 
+/**
+ * Totals grouped by VAT rate — one row per band.
+ *
+ * Both the printed document and the UBL-TR payload have to state tax per
+ * rate, not just as a single figure: a document mixing 10 % and 20 % KDV
+ * files as two `TaxSubtotal` entries, and a reader checking the paper copy
+ * needs to see the same split. Derived from `computeTotals` so the bands can
+ * never disagree with the grand total.
+ */
+export interface TaxBand {
+  rate: number;
+  /** Taxable base in this band, after the document discount is spread. */
+  taxable: number;
+  tax: number;
+}
+
+export function taxBreakdown(
+  lines: DocumentLine[],
+  totals: DocumentTotals,
+): TaxBand[] {
+  const byRate = new Map<number, { taxable: number; tax: number }>();
+
+  for (const line of lines) {
+    const computed = totals.lines.find((l) => l.id === line.id);
+    if (!computed) continue;
+    const rate = line.taxRate || 0;
+    const band = byRate.get(rate) ?? { taxable: 0, tax: 0 };
+    band.taxable += computed.taxable;
+    band.tax += computed.tax;
+    byRate.set(rate, band);
+  }
+
+  return [...byRate.entries()]
+    .map(([rate, b]) => ({
+      rate,
+      taxable: round2(b.taxable),
+      tax: round2(b.tax),
+    }))
+    .sort((a, b) => a.rate - b.rate);
+}
+
 /* ------------------------------------------------------------------ */
 /* Currency                                                            */
 /* ------------------------------------------------------------------ */

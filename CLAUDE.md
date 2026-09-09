@@ -27,8 +27,8 @@ npx tsc --noEmit       # must be silent before you call anything done
 - **Elevation is two faint steps only**: `shadow-card`, `shadow-pop`,
   `shadow-modal`. Everything else separates with 1px hairlines and whitespace.
 - **`text-brand` (`#1b2350`) is the logo navy and belongs to the wordmark
-  only. `accent` (`#2f5bd8`) is the working colour** — filled buttons, active
-  nav, links, chart data.
+  only. `accent` (`#1a224d`, the same logo navy) is the working colour** —
+  filled buttons, active nav, links, chart data.
 - **A status never picks its own colour.** Map it to a `Tone` in
   `src/lib/labels.ts` and let the `Badge` render it.
 - **Do not hardcode type sizes.** The scale lives in the `@theme` block of
