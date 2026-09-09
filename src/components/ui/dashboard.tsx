@@ -82,7 +82,7 @@ export function KpiTile({
         )}
       </div>
 
-      <span className="text-3xl font-bold tracking-tight leading-none text-ink">
+      <span className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight leading-none text-ink">
         <Num>{value}</Num>
       </span>
 
