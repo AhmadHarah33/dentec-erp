@@ -8,7 +8,7 @@ import type { ISODate } from "./data/types";
  */
 const BIDI_MARKS = /[‎‏؜]/g;
 
-function stripBidi(value: string): string {
+export function stripBidi(value: string): string {
   return value.replace(BIDI_MARKS, "");
 }
 
@@ -81,12 +81,30 @@ export function formatMonth(date: ISODate, locale = "ar"): string {
   );
 }
 
-export function formatDateTime(ts: string | null | undefined, locale = "ar"): string {
+/**
+ * The business clock. Timestamps are stored in UTC; they are shown in the
+ * company's own zone so the server render and the browser render agree —
+ * formatting in "whatever zone this machine is in" put UTC in the HTML and
+ * local time in the hydrated page, which React rejects as a mismatch.
+ */
+export const APP_TIME_ZONE = process.env.NEXT_PUBLIC_TIME_ZONE || "Europe/Istanbul";
+
+/**
+ * Assembled from numeric parts rather than taken whole from Intl: Node and the
+ * browser ship different ICU builds and disagree on separators (a comma here,
+ * none there), which is another hydration mismatch. Digits they agree on.
+ */
+export function formatDateTime(ts: string | null | undefined, _locale = "ar"): string {
   if (!ts) return "—";
-  return stripBidi(
-    new Intl.DateTimeFormat(`${locale}-u-ca-gregory-nu-latn`, {
-      dateStyle: "short",
-      timeStyle: "short",
-    }).format(new Date(ts)),
-  );
+  const parts = new Intl.DateTimeFormat("en-GB-u-nu-latn", {
+    timeZone: APP_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(ts));
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("day")}/${get("month")}/${get("year")} ${get("hour")}:${get("minute")}`;
 }

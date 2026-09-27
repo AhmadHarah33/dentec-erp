@@ -342,7 +342,7 @@ export function ItemsClient({
                                 e.stopPropagation();
                                 openEdit(item);
                               }}
-                              className="text-start hover:text-accent transition-colors truncate min-w-0"
+                              className="text-start min-h-9 hover:text-accent transition-colors truncate min-w-0"
                             >
                               <span className={item.active ? "" : "text-muted line-through"}>
                                 {localName(item, locale)}
@@ -359,7 +359,7 @@ export function ItemsClient({
                                 e.stopPropagation();
                                 setMovingId(movingId === item.id ? null : item.id);
                               }}
-                              className="ms-auto shrink-0 text-faint hover:text-accent hover:bg-accent-soft rounded-sm p-1 transition-colors"
+                              className="ms-auto shrink-0 grid place-items-center size-9 -my-1.5 text-faint hover:text-accent hover:bg-accent-soft rounded-sm transition-colors"
                               aria-label={t("label.moveCategory")}
                               title={t("label.moveCategory")}
                             >

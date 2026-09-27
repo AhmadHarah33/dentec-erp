@@ -24,7 +24,7 @@ export default async function PrintPage({
   if (!doc) notFound();
 
   return (
-    <main className="bg-white min-h-screen">
+    <main className="bg-white min-h-screen overflow-x-auto">
       <DocumentSheet {...doc} />
     </main>
   );

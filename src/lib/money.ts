@@ -3,6 +3,7 @@
  * conversion in the app comes from here, so a rounding decision is made once.
  */
 
+import { stripBidi } from "./dates";
 import type {
   CurrencyCode,
   DiscountKind,
@@ -166,12 +167,12 @@ export function formatMoney(
   locale = "ar",
 ): string {
   const decimals = CURRENCY_DECIMALS[currency] ?? 2;
-  return new Intl.NumberFormat(`${locale}-u-nu-latn`, {
+  return stripBidi(new Intl.NumberFormat(`${locale}-u-nu-latn`, {
     style: "currency",
     currency,
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
-  }).format(amount || 0);
+  }).format(amount || 0));
 }
 
 /**
@@ -190,25 +191,29 @@ export function formatMoneyCompact(
   // Below 10,000 the full figure is short enough to read, and compacting it
   // loses precision for no gain in width.
   if (Math.abs(n) < 10_000) return formatMoney(n, currency, locale);
-  return new Intl.NumberFormat(`${locale}-u-nu-latn`, {
+  return stripBidi(new Intl.NumberFormat(`${locale}-u-nu-latn`, {
     style: "currency",
     currency,
     notation: "compact",
+    // Explicit: ICU builds disagree on the default ("45.0K" vs "45K").
+    minimumFractionDigits: 0,
     maximumFractionDigits: 1,
-  }).format(n);
+  }).format(n));
 }
 
 /** A bare compact figure — for chart axis ticks, where the currency is implied. */
 export function formatNumberCompact(n: number, locale = "ar"): string {
-  return new Intl.NumberFormat(`${locale}-u-nu-latn`, {
+  return stripBidi(new Intl.NumberFormat(`${locale}-u-nu-latn`, {
     notation: "compact",
+    // Explicit: ICU builds disagree on the default ("45.0K" vs "45K").
+    minimumFractionDigits: 0,
     maximumFractionDigits: 1,
-  }).format(n || 0);
+  }).format(n || 0));
 }
 
 export function formatNumber(n: number, locale = "ar", decimals = 2): string {
-  return new Intl.NumberFormat(`${locale}-u-nu-latn`, {
+  return stripBidi(new Intl.NumberFormat(`${locale}-u-nu-latn`, {
     minimumFractionDigits: 0,
     maximumFractionDigits: decimals,
-  }).format(n || 0);
+  }).format(n || 0));
 }

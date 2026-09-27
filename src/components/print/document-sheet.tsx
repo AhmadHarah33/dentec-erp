@@ -147,7 +147,7 @@ export function DocumentSheet(props: SheetProps) {
     : t("print.purchase");
 
   return (
-    <article className="print-doc mx-auto w-full max-w-[210mm] bg-white text-ink p-8 text-xs">
+    <article className="print-doc mx-auto w-full max-w-[210mm] min-w-[150mm] bg-white text-ink p-4 sm:p-8 print:p-8 text-xs">
       {/* ---- Header ------------------------------------------------ */}
       <header className="flex items-start justify-between gap-6 pb-4 border-b border-line">
         <div className="flex items-start gap-3">

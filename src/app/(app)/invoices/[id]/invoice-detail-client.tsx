@@ -217,20 +217,20 @@ export function InvoiceDetailClient({
                 />
               </div>
 
-              <div className="overflow-x-auto">
+              <div className="relative overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="hairline-b bg-sunken/60 print:bg-transparent text-2xs text-muted">
-                      <th className="h-10 px-3 text-start font-medium w-8">#</th>
+                      <th className="h-10 px-3 text-start font-medium w-8 hidden xl:table-cell print:table-cell">#</th>
                       <th className="h-10 px-3 text-start font-medium">{t("label.name")}</th>
                       <th className="h-10 px-3 text-end font-medium w-16">{t("label.qty")}</th>
-                      <th className="h-10 px-3 text-end font-medium w-28">
+                      <th className="h-10 px-3 text-end font-medium w-28 hidden md:table-cell print:table-cell">
                         {t("label.unitPrice")}
                       </th>
-                      <th className="h-10 px-3 text-end font-medium w-16">
+                      <th className="h-10 px-3 text-end font-medium w-16 hidden xl:table-cell print:table-cell">
                         {t("label.discount")}
                       </th>
-                      <th className="h-10 px-3 text-end font-medium w-16">{t("label.tax")}</th>
+                      <th className="h-10 px-3 text-end font-medium w-16 hidden xl:table-cell print:table-cell">{t("label.tax")}</th>
                       <th className="h-10 px-3 text-end font-medium w-28">
                         {t("label.lineTotal")}
                       </th>
@@ -242,7 +242,7 @@ export function InvoiceDetailClient({
                       const lineTotal = totals.lines[index];
                       return (
                         <tr key={line.id} className="hairline-b last:border-b-0">
-                          <td className="h-11 px-3 text-faint">
+                          <td className="h-11 px-3 text-faint hidden xl:table-cell print:table-cell">
                             <Num>{index + 1}</Num>
                           </td>
                           <td className="h-11 px-3">
@@ -254,15 +254,15 @@ export function InvoiceDetailClient({
                           <td className="h-11 px-3 text-end">
                             <Num>{formatNumber(line.qty, locale)}</Num>
                           </td>
-                          <td className="h-11 px-3 text-end">
+                          <td className="h-11 px-3 text-end hidden md:table-cell print:table-cell">
                             <Num>{money(line.unitPrice)}</Num>
                           </td>
-                          <td className="h-11 px-3 text-end text-muted">
+                          <td className="h-11 px-3 text-end text-muted hidden xl:table-cell print:table-cell">
                             <Num>
                               {line.discountPercent ? `${line.discountPercent}%` : "—"}
                             </Num>
                           </td>
-                          <td className="h-11 px-3 text-end text-muted">
+                          <td className="h-11 px-3 text-end text-muted hidden xl:table-cell print:table-cell">
                             <Num>{line.taxRate ? `${line.taxRate}%` : "—"}</Num>
                           </td>
                           <td className="h-11 px-3 text-end">

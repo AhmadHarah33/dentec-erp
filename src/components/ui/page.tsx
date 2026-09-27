@@ -28,7 +28,7 @@ export function PageHeader({
         </h1>
         {subtitle && <p className="text-xs text-muted mt-1.5">{subtitle}</p>}
       </div>
-      {actions && <div className="flex items-center gap-2 shrink-0 no-print">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2 min-w-0 no-print">{actions}</div>}
     </header>
   );
 }

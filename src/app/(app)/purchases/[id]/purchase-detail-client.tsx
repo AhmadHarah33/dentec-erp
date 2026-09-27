@@ -155,10 +155,10 @@ export function PurchaseDetailClient({
               <thead>
                 <tr className="hairline-b bg-sunken/60 text-2xs text-muted">
                   <th className="h-10 px-3 text-start font-medium">{t("label.name")}</th>
-                  <th className="h-10 px-3 text-start font-medium">{t("label.description")}</th>
+                  <th className="h-10 px-3 text-start font-medium hidden md:table-cell print:table-cell">{t("label.description")}</th>
                   <th className="h-10 px-3 text-end font-medium">{t("label.qty")}</th>
-                  <th className="h-10 px-3 text-end font-medium">{t("label.unitPrice")}</th>
-                  <th className="h-10 px-3 text-end font-medium">{t("label.discount")}</th>
+                  <th className="h-10 px-3 text-end font-medium hidden md:table-cell print:table-cell">{t("label.unitPrice")}</th>
+                  <th className="h-10 px-3 text-end font-medium hidden md:table-cell print:table-cell">{t("label.discount")}</th>
                   <th className="h-10 px-3 text-end font-medium">{t("label.total")}</th>
                 </tr>
               </thead>
@@ -174,14 +174,14 @@ export function PurchaseDetailClient({
                           {item && <Num className="text-2xs text-faint ms-2">{item.sku}</Num>}
                         </span>
                       </td>
-                      <td className="h-11 px-3 text-muted text-2xs">{line.description || "—"}</td>
+                      <td className="h-11 px-3 text-muted text-2xs hidden md:table-cell print:table-cell">{line.description || "—"}</td>
                       <td className="h-11 px-3 text-end">
                         <Num>{line.qty}</Num>
                       </td>
-                      <td className="h-11 px-3 text-end">
+                      <td className="h-11 px-3 text-end hidden md:table-cell print:table-cell">
                         <Num>{money(line.unitPrice)}</Num>
                       </td>
-                      <td className="h-11 px-3 text-end">
+                      <td className="h-11 px-3 text-end hidden md:table-cell print:table-cell">
                         <Num>{line.discountPercent || "—"}</Num>
                       </td>
                       <td className="h-11 px-3 text-end">

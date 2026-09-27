@@ -166,7 +166,7 @@ export function PeriodToggle<T extends string>({
             aria-selected={active}
             scroll={false}
             className={cn(
-              "h-8 px-3.5 grid place-items-center rounded-full text-2xs font-medium transition-colors duration-[var(--dur-swift)]",
+              "h-9 px-3.5 grid place-items-center rounded-full text-2xs font-medium transition-colors duration-[var(--dur-swift)]",
               active ? "bg-surface text-ink shadow-card font-semibold" : "text-muted hover:text-ink",
             )}
           >

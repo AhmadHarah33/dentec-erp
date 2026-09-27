@@ -454,7 +454,7 @@ function JobCard({
           aria-haspopup="menu"
           aria-expanded={menu}
           aria-label={t("service.moveTo")}
-          className="shrink-0 grid place-items-center size-7 -m-1 rounded-sm text-faint hover:text-ink hover:bg-sunken transition-colors"
+          className="shrink-0 grid place-items-center size-9 -m-1.5 rounded-sm text-faint hover:text-ink hover:bg-sunken transition-colors"
         >
           <IconChevronDown size={14} />
         </button>

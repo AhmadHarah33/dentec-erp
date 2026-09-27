@@ -258,7 +258,7 @@ export function JobClient({
       />
 
       {/* Status Stepper -------------------------------------------- */}
-      <div className="flex gap-2 mb-5 overflow-x-auto pb-2">
+      <div className="relative flex gap-2 mb-5 overflow-x-auto pb-2">
         {SERVICE_STATUSES.map((status) => {
           const isCurrentStatus = status === job.status;
           const isCompleted = SERVICE_STATUSES.indexOf(status) <
@@ -269,7 +269,7 @@ export function JobClient({
               key={status}
               onClick={() => submitChangeStatus(status)}
               className={`
-                flex-shrink-0 px-3 py-1.5 rounded-sm border text-xs font-medium
+                flex-shrink-0 h-10 px-3 rounded-sm border text-xs font-medium
                 transition-colors
                 ${
                   isCurrentStatus
@@ -393,20 +393,20 @@ export function JobClient({
                 {t("label.none")}
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="relative overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="hairline-b bg-sunken/60 text-2xs text-muted">
                       <th className="h-10 px-3 text-start font-medium">
                         {t("label.name")}
                       </th>
-                      <th className="h-10 px-3 text-start font-medium">
+                      <th className="h-10 px-3 text-start font-medium hidden md:table-cell">
                         {t("label.warehouse")}
                       </th>
                       <th className="h-10 px-3 text-end font-medium">
                         {t("label.qty")}
                       </th>
-                      <th className="h-10 px-3 text-end font-medium">
+                      <th className="h-10 px-3 text-end font-medium hidden md:table-cell">
                         {t("label.unitPrice")}
                       </th>
                       <th className="h-10 px-3 text-end font-medium">
@@ -439,7 +439,7 @@ export function JobClient({
                               </div>
                             </div>
                           </td>
-                          <td className="h-10 px-3 text-start text-2xs text-muted">
+                          <td className="h-10 px-3 text-start text-2xs text-muted hidden md:table-cell">
                             {localName(warehouse, locale)}
                           </td>
                           <td className="h-10 px-3 text-end">
@@ -447,7 +447,7 @@ export function JobClient({
                               {formatNumber(part.qty, locale)}
                             </Num>
                           </td>
-                          <td className="h-10 px-3 text-end">
+                          <td className="h-10 px-3 text-end hidden md:table-cell">
                             <Num className="text-2xs">{money(part.unitPrice)}</Num>
                           </td>
                           <td className="h-10 px-3 text-end">
