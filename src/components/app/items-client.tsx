@@ -32,6 +32,7 @@ import { Modal, Confirm } from "@/components/ui/modal";
 import { Drawer, DrawerSection } from "@/components/ui/drawer";
 import { DetailRow } from "@/components/ui/page";
 import { IconPlus, IconSearch, IconTag } from "@/components/ui/icons";
+import { useRole } from "./role-context";
 
 interface Props {
   itemType: ItemType;
@@ -89,6 +90,10 @@ export function ItemsClient({
   locale,
 }: Props) {
   const t = useT();
+  const { can } = useRole();
+  // Service staff look parts up; they do not price or edit them.
+  const showMoney = can("money.view");
+  const canEdit = can("catalog.write");
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
@@ -243,10 +248,12 @@ export function ItemsClient({
         title={title}
         subtitle={subtitle}
         actions={
-          <Button variant="primary" onClick={openNew}>
-            <IconPlus />
-            {newLabel}
-          </Button>
+          canEdit && (
+            <Button variant="primary" onClick={openNew}>
+              <IconPlus />
+              {newLabel}
+            </Button>
+          )
         }
       />
 
@@ -273,10 +280,12 @@ export function ItemsClient({
           />
           {t("label.inactive")}
         </label>
-        <Button size="sm" variant="default" onClick={openNewCategory} className="ms-auto">
-          <IconPlus size={14} />
-          {t("page.categories.new")}
-        </Button>
+        {canEdit && (
+          <Button size="sm" variant="default" onClick={openNewCategory} className="ms-auto">
+            <IconPlus size={14} />
+            {t("page.categories.new")}
+          </Button>
+        )}
         <span className="text-2xs text-faint num">
           {t("msg.rowsCount", { n: visibleItems.length })}
         </span>
@@ -310,15 +319,19 @@ export function ItemsClient({
                     <th className="h-10 px-4 text-end text-2xs font-medium text-muted w-[90px]">
                       {t("label.onHand")}
                     </th>
-                    <th className="h-10 px-4 text-end text-2xs font-medium text-muted hidden xl:table-cell w-[90px]">
-                      {t("label.cost")}
-                    </th>
-                    <th className="h-10 px-4 text-end text-2xs font-medium text-muted w-[100px]">
-                      {t("label.price")}
-                    </th>
-                    <th className="h-10 px-4 text-end text-2xs font-medium text-muted hidden xl:table-cell w-[70px]">
-                      {t("label.margin")}
-                    </th>
+                    {showMoney && (
+                      <>
+                        <th className="h-10 px-4 text-end text-2xs font-medium text-muted hidden xl:table-cell w-[90px]">
+                          {t("label.cost")}
+                        </th>
+                        <th className="h-10 px-4 text-end text-2xs font-medium text-muted w-[100px]">
+                          {t("label.price")}
+                        </th>
+                        <th className="h-10 px-4 text-end text-2xs font-medium text-muted hidden xl:table-cell w-[70px]">
+                          {t("label.margin")}
+                        </th>
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -340,7 +353,8 @@ export function ItemsClient({
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                openEdit(item);
+                                if (canEdit) openEdit(item);
+                                else setViewing(item);
                               }}
                               className="text-start min-h-9 hover:text-accent transition-colors truncate min-w-0"
                             >
@@ -353,6 +367,7 @@ export function ItemsClient({
                                 {[item.brand, item.model].filter(Boolean).join(" · ")}
                               </span>
                             )}
+                            {canEdit && (
                             <button
                               type="button"
                               onClick={(e) => {
@@ -365,6 +380,7 @@ export function ItemsClient({
                             >
                               <IconTag size={14} />
                             </button>
+                            )}
                           </div>
                           {movingId === item.id && (
                             <div className="mt-1.5 max-w-56" onClick={(e) => e.stopPropagation()}>
@@ -406,6 +422,8 @@ export function ItemsClient({
                             </Num>
                           </Dot>
                         </td>
+{showMoney && (
+                          <>
                         <td className="py-2.5 px-4 align-middle text-end hidden xl:table-cell">
                           <Num className="text-muted">{money(item.cost)}</Num>
                         </td>
@@ -419,6 +437,8 @@ export function ItemsClient({
                               : "—"}
                           </Num>
                         </td>
+                          </>
+                        )}
                       </tr>
                     );
                   })}
@@ -433,9 +453,9 @@ export function ItemsClient({
             <EmptyState
               compact
               title={query ? t("empty.noResults") : t("empty.items")}
-              hint={query ? t("empty.noResultsHint") : undefined}
+              hint={query ? t("empty.noResultsHint") : t("empty.hint.items")}
               action={
-                !query && (
+                !query && canEdit && (
                   <Button variant="primary" onClick={openNew}>
                     {newLabel}
                   </Button>
@@ -713,7 +733,7 @@ export function ItemsClient({
           )
         }
         footer={
-          viewing && (
+          viewing && canEdit && (
             <Button
               variant="primary"
               className="w-full"
@@ -759,6 +779,7 @@ export function ItemsClient({
               </DetailRow>
             </DrawerSection>
 
+            {showMoney && (
             <DrawerSection title={t("label.price")}>
               <DetailRow label={t("label.cost")}>
                 <Num>{money(viewing.cost)}</Num>
@@ -772,6 +793,7 @@ export function ItemsClient({
                 <Num>{formatNumber(viewing.taxRate, locale, 0)}%</Num>
               </DetailRow>
             </DrawerSection>
+            )}
 
             {/* A part is found by the machine it fits, not by its own name. */}
             {viewing.itemType === "spare_part" && viewing.fitsItemIds.length > 0 && (

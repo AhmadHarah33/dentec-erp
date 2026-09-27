@@ -1,5 +1,6 @@
 "use client";
 
+import { useRole } from "@/components/app/role-context";
 import { useMemo, useState, useTransition } from "react";
 import type { Category, CategoryScope } from "@/lib/data/types";
 import { useT } from "@/lib/i18n/context";
@@ -37,6 +38,7 @@ export function CategoriesClient({
   locale: string;
 }) {
   const t = useT();
+  const canEdit = useRole().can("catalog.write");
   const [pending, startTransition] = useTransition();
   const [editing, setEditing] = useState<Category | null>(null);
   const [creating, setCreating] = useState(false);
@@ -121,10 +123,12 @@ export function CategoriesClient({
         title={t("page.categories.title")}
         subtitle={t("page.categories.subtitle")}
         actions={
-          <Button variant="primary" onClick={openNew}>
-            <IconPlus />
-            {t("page.categories.new")}
-          </Button>
+          canEdit && (
+            <Button variant="primary" onClick={openNew}>
+              <IconPlus />
+              {t("page.categories.new")}
+            </Button>
+          )
         }
       />
 
@@ -132,10 +136,13 @@ export function CategoriesClient({
         {tree.length === 0 ? (
           <EmptyState
             title={t("empty.categories")}
+            hint={t("empty.hint.categories")}
             action={
-              <Button variant="primary" onClick={openNew}>
-                {t("page.categories.new")}
-              </Button>
+              canEdit && (
+                <Button variant="primary" onClick={openNew}>
+                  {t("page.categories.new")}
+                </Button>
+              )
             }
           />
         ) : (
@@ -180,7 +187,9 @@ export function CategoriesClient({
                     <Num>{formatNumber(counts[category.id] ?? 0, locale, 0)}</Num>
                   </td>
                   <td className="h-11 px-3">
-                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                    {/* Revealed on hover only where there is a hover: on touch they stay visible. */}
+                    {canEdit && (
+                    <div className="flex items-center justify-end gap-1 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                       <Button
                         size="sm"
                         variant="ghost"
@@ -202,6 +211,7 @@ export function CategoriesClient({
                         <IconTrash />
                       </Button>
                     </div>
+                    )}
                   </td>
                 </tr>
               ))}

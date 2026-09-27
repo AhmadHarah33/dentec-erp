@@ -1,5 +1,6 @@
 "use server";
 
+import { deny } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { create, remove, snapshot, update } from "@/lib/data/repository";
 import type { Category, Item } from "@/lib/data/types";
@@ -22,6 +23,8 @@ export async function saveCategory(
   id: string | null,
   input: CategoryInput,
 ): Promise<Result<string>> {
+  const denied = await deny("catalog.write");
+  if (denied) return denied;
   if (!input.nameAr.trim()) return fail("msg.requiredField");
 
   // A category cannot be its own parent, nor a descendant of itself.
@@ -45,6 +48,8 @@ export async function saveCategory(
 }
 
 export async function deleteCategory(id: string): Promise<Result> {
+  const denied = await deny("catalog.write");
+  if (denied) return denied;
   const db = await snapshot();
   if (db.items.some((i) => i.categoryId === id)) {
     return fail("msg.error", "category-in-use");
@@ -62,6 +67,8 @@ export async function deleteCategory(id: string): Promise<Result> {
 /* ------------------------------------------------------------------ */
 
 export async function saveItem(id: string | null, input: ItemInput): Promise<Result<string>> {
+  const denied = await deny("catalog.write");
+  if (denied) return denied;
   if (!input.nameAr.trim() || !input.sku.trim()) return fail("msg.requiredField");
 
   const db = await snapshot();
@@ -81,6 +88,8 @@ export async function saveItem(id: string | null, input: ItemInput): Promise<Res
  * the records the business actually needs to keep.
  */
 export async function deleteItem(id: string): Promise<Result<"deleted" | "archived">> {
+  const denied = await deny("catalog.write");
+  if (denied) return denied;
   const db = await snapshot();
   const referenced =
     db.stockMoves.some((m) => m.itemId === id) ||

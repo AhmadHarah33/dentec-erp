@@ -14,6 +14,7 @@ export function Modal({
   children,
   footer,
   width = "md",
+  dismissible = true,
 }: {
   open: boolean;
   onClose: () => void;
@@ -22,13 +23,15 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
   width?: "sm" | "md" | "lg" | "xl";
+  /** False for a dialog that must be answered — no close button, no Escape, no backdrop click. */
+  dismissible?: boolean;
 }) {
   const t = useT();
 
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && dismissible) onClose();
     }
     document.addEventListener("keydown", onKey);
     // Stop the page behind the dialog from scrolling with it.
@@ -38,7 +41,7 @@ export function Modal({
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = previous;
     };
-  }, [open, onClose]);
+  }, [open, onClose, dismissible]);
 
   if (!open) return null;
 
@@ -53,7 +56,7 @@ export function Modal({
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-8 no-print">
       <div
         className="anim-fade fixed inset-0 bg-ink/45 backdrop-blur-[2px]"
-        onClick={onClose}
+        onClick={dismissible ? onClose : undefined}
         aria-hidden="true"
       />
       <div
@@ -72,14 +75,16 @@ export function Modal({
               <p className="text-2xs text-muted mt-0.5 truncate">{description}</p>
             )}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t("action.close")}
-            className="self-center text-faint hover:text-ink transition-colors p-1 -me-1"
-          >
-            <IconClose />
-          </button>
+          {dismissible && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label={t("action.close")}
+              className="self-center grid place-items-center size-9 -me-2 rounded-sm text-faint hover:text-ink hover:bg-sunken transition-colors"
+            >
+              <IconClose />
+            </button>
+          )}
         </div>
 
         <div className="p-5">{children}</div>

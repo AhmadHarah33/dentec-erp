@@ -1,5 +1,6 @@
 "use server";
 
+import { deny } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { create, remove, snapshot, transaction } from "@/lib/data/repository";
 import type { Warehouse } from "@/lib/data/types";
@@ -20,6 +21,8 @@ export async function saveWarehouse(
   id: string | null,
   input: WarehouseInput,
 ): Promise<Result<string>> {
+  const denied = await deny("settings.write");
+  if (denied) return denied;
   if (!input.nameAr.trim()) return fail("msg.requiredField");
 
   const rowId = await transaction((db, h) => {
@@ -46,6 +49,8 @@ export async function saveWarehouse(
 }
 
 export async function deleteWarehouse(id: string): Promise<Result> {
+  const denied = await deny("settings.write");
+  if (denied) return denied;
   const db = await snapshot();
   if (db.stockMoves.some((m) => m.warehouseId === id)) {
     return fail("msg.error", "warehouse-has-moves");
@@ -71,6 +76,8 @@ export async function adjustStock(input: {
   date: string;
   note: string;
 }): Promise<Result> {
+  const denied = await deny("stock.write");
+  if (denied) return denied;
   if (!input.itemId || !input.warehouseId) return fail("msg.requiredField");
   if (!input.qtyDelta) return fail("msg.requiredField");
 
@@ -106,6 +113,8 @@ export async function transferStock(input: {
   date: string;
   note: string;
 }): Promise<Result> {
+  const denied = await deny("stock.write");
+  if (denied) return denied;
   if (input.fromWarehouseId === input.toWarehouseId) return fail("msg.error", "same-warehouse");
   if (input.qty <= 0) return fail("msg.requiredField");
 

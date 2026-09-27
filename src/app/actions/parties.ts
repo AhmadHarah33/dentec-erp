@@ -1,5 +1,6 @@
 "use server";
 
+import { deny } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { create, remove, snapshot, update } from "@/lib/data/repository";
 import type { Party } from "@/lib/data/types";
@@ -13,6 +14,8 @@ export async function saveParty(
   id: string | null,
   input: PartyInput,
 ): Promise<Result<string>> {
+  const denied = await deny(which === "customers" ? "customers.write" : "suppliers.write");
+  if (denied) return denied;
   if (!input.name.trim()) return fail("msg.requiredField");
 
   const db = await snapshot();
@@ -35,6 +38,8 @@ export async function deleteParty(
   which: Which,
   id: string,
 ): Promise<Result<"deleted" | "archived">> {
+  const denied = await deny(which === "customers" ? "customers.write" : "suppliers.write");
+  if (denied) return denied;
   const db = await snapshot();
   const referenced =
     db.payments.some((p) => p.partyId === id) ||

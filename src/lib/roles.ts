@@ -1,18 +1,16 @@
 import type { MessageKey } from "./i18n";
+import type { Role } from "./data/types";
 
 /**
  * Which of the three jobs the person in front of the screen is doing.
  *
- * This is a VIEW PREFERENCE, not security. It decides what the dashboard
- * leads with and nothing else: no page is hidden, no action is blocked, no
- * figure is withheld. Real permissions arrive with Supabase accounts; until
- * then the app has no idea who anyone is and must not pretend otherwise.
- *
- * Stored in a cookie exactly like the locale, so it survives a reload and is
- * per-device — the workshop machine can sit on "service" while the office one
- * sits on "owner".
+ * With Supabase connected this is the signed-in user's role, read from their
+ * profile — the cookie below is ignored. In demo mode (no Supabase env vars)
+ * there is nobody to sign in, so the cookie picks which role the demo acts as;
+ * that makes every role's navigation, guards and walkthrough testable without
+ * a server. The cookie is never trusted when Supabase is on.
  */
-export type ViewRole = "owner" | "accounting" | "service";
+export type ViewRole = Role;
 
 export const VIEW_ROLES: ViewRole[] = ["owner", "accounting", "service"];
 export const ROLE_COOKIE = "dentec_role";

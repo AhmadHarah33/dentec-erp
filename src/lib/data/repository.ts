@@ -1,12 +1,19 @@
 /**
  * The seam between the app and its storage.
  *
- * Pages and Server Actions import from here and nowhere deeper. Replacing
- * `store.ts` with a Supabase-backed implementation is a change to this file
- * only — no page needs to know where the rows came from.
+ * Pages and Server Actions import from here and nowhere deeper. Two stores sit
+ * behind it with the same contract:
+ *
+ * - `store-supabase.ts` when SUPABASE_URL and the anon key are set — real,
+ *   multi-user data under row-level security;
+ * - `store.ts` otherwise — the JSON demo file, seeded with sample data.
+ *
+ * No page needs to know which one answered.
  */
 
-import { getDb, mutate } from "./store";
+import * as jsonStore from "./store";
+import * as supabaseStore from "./store-supabase";
+import { isSupabaseEnabled } from "../supabase/config";
 import type {
   Base,
   CollectionName,
@@ -24,6 +31,13 @@ export type NewRow<K extends CollectionName> = Omit<
   "id" | "createdAt" | "updatedAt"
 > &
   Partial<Base>;
+
+function store() {
+  return isSupabaseEnabled() ? supabaseStore : jsonStore;
+}
+
+const getDb = () => store().getDb();
+const mutate = <T,>(fn: (db: Database) => T | Promise<T>) => store().mutate(fn);
 
 function now(): string {
   return new Date().toISOString();
@@ -122,5 +136,10 @@ export async function transaction<T>(
   return mutate((db) => fn(db, { id: newId, now }));
 }
 
-export { resetDb } from "./store";
+/** Throw the data away and lay the demo set down again. Demo mode only. */
+export async function resetDb(): Promise<void> {
+  return store().resetDb();
+}
+
 export { dataDir } from "./store";
+export { PermissionError } from "./store-supabase";

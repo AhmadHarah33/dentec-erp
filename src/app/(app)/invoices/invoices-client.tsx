@@ -205,6 +205,7 @@ export function InvoicesClient({
         onRowClick={(r) => setOpen(r)}
         pageSize={30}
         emptyTitle={t("empty.invoices")}
+        emptyHint={t("empty.hint.invoices")}
         emptyAction={
           <LinkButton href="/invoices/new" variant="primary">
             {t("page.invoices.new")}

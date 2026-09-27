@@ -618,6 +618,7 @@ export function AccountingClient({
           rowKey={(p) => p.id}
           pageSize={30}
           emptyTitle={t("empty.payments")}
+          emptyHint={t("empty.hint.payments")}
           emptyAction={
             <Button variant="primary" onClick={openNewPayment}>
               {t("page.accounting.newPayment")}
@@ -677,6 +678,7 @@ export function AccountingClient({
           rowKey={(e) => e.id}
           pageSize={30}
           emptyTitle={t("empty.expenses")}
+          emptyHint={t("empty.hint.expenses")}
           emptyAction={
             <Button variant="primary" onClick={openNewExpense}>
               {t("page.accounting.newExpense")}

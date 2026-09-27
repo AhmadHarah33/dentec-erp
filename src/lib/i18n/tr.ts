@@ -1,11 +1,11 @@
 import type { MessageKey } from "./ar";
 
 /**
- * Turkish dictionary. Mirrors `ar.ts` key for key — every `MessageKey`
- * must resolve here, so a missing translation is a compile error rather
- * than a silent fall-through to Arabic.
+ * Turkish dictionary. Mirrors `ar.ts` for everything written before the
+ * Supabase work; keys added since then are Arabic-only for now and fall
+ * through to `ar.ts` in `translate()` until the Turkish pass.
  */
-const tr: Record<MessageKey, string> = {
+const tr: Partial<Record<MessageKey, string>> = {
   "app.name": "Dentec",
   "app.tagline": "Kaynak yönetim sistemi",
 
@@ -147,11 +147,6 @@ const tr: Record<MessageKey, string> = {
   "unit.liter": "Litre",
 
   /* Roles --------------------------------------------------------- */
-  "role.owner": "Sahip",
-  "role.accountant": "Muhasebeci",
-  "role.sales": "Satış",
-  "role.technician": "Teknisyen",
-  "role.viewer": "İzleyici",
 
   /* Party kinds --------------------------------------------------- */
   "kind.clinic": "Klinik",

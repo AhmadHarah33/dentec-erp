@@ -1,5 +1,6 @@
 "use client";
 
+import { useRole } from "./role-context";
 import { useMemo, useState, useTransition } from "react";
 import type {
   BillingRegion,
@@ -90,6 +91,8 @@ export function PartiesClient({
   const [error, setError] = useState<string | null>(null);
   const [showInactive, setShowInactive] = useState(false);
 
+  // Service staff keep the contact details and lose the ledger.
+  const showMoney = useRole().can("money.view");
   const money = (n: number) => formatMoney(n, currency, locale);
   const compact = (n: number) => formatMoneyCompact(n, currency, locale);
   const visible = useMemo(
@@ -163,7 +166,7 @@ export function PartiesClient({
     });
   }
 
-  const columns: Column<PartyRow>[] = [
+  const allColumns: Column<PartyRow>[] = [
     {
       key: "code",
       header: t("label.code"),
@@ -240,6 +243,7 @@ export function PartiesClient({
       },
     },
   ];
+  const columns = showMoney ? allColumns : allColumns.filter((c) => c.key !== "balance");
 
   return (
     <>
@@ -254,6 +258,7 @@ export function PartiesClient({
         }
       />
 
+      {showMoney && (
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <StatTile label={title} value={String(totals.count)} icon={IconUsers} />
         <StatTile
@@ -270,6 +275,7 @@ export function PartiesClient({
           chip={totals.overLimit > 0 ? t("dash.tileBad") : t("dash.tileGood")}
         />
       </div>
+      )}
 
       <DataTable
         rows={visible}
@@ -277,6 +283,7 @@ export function PartiesClient({
         rowKey={(r) => r.party.id}
         onRowClick={(r) => setViewing(r)}
         emptyTitle={which === "customers" ? t("empty.customers") : t("empty.suppliers")}
+        emptyHint={which === "customers" ? t("empty.hint.customers") : t("empty.hint.suppliers")}
         emptyAction={
           <Button variant="primary" onClick={openNew}>
             {newLabel}
@@ -643,6 +650,7 @@ export function PartiesClient({
               </DetailRow>
             </DrawerSection>
 
+            {showMoney && (
             <DrawerSection title={t("label.balance")}>
               <DetailRow label={t("label.balance")}>
                 <Num className={viewing.balance > 0.005 ? "text-danger font-semibold" : undefined}>
@@ -656,6 +664,7 @@ export function PartiesClient({
                 <Num>{viewing.documents}</Num>
               </DetailRow>
             </DrawerSection>
+            )}
 
             {viewing.party.notes && (
               <DrawerSection title={t("label.notes")}>

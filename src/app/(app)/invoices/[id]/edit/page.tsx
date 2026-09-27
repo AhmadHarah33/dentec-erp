@@ -1,3 +1,4 @@
+import { requireSection } from "@/lib/session";
 import { notFound, redirect } from "next/navigation";
 import { snapshot } from "@/lib/data/repository";
 import { getI18n } from "@/lib/i18n/server";
@@ -9,6 +10,7 @@ export default async function EditInvoicePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireSection("invoices");
   const { id } = await params;
   const { locale } = await getI18n();
   const db = await snapshot();

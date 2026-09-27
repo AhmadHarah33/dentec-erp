@@ -8,7 +8,8 @@ import { cn } from "@/lib/cn";
 import { NAV, isActive } from "@/lib/nav";
 import { useT } from "@/lib/i18n/context";
 import { IconChevronDown } from "@/components/ui/icons";
-import { RoleSwitcher } from "./role-switcher";
+import { AccountMenu } from "./account-menu";
+import { useRole } from "./role-context";
 import { LocaleToggle } from "./locale-toggle";
 
 /**
@@ -20,9 +21,15 @@ import { LocaleToggle } from "./locale-toggle";
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
   const t = useT();
   const pathname = usePathname();
+  const { canVisit } = useRole();
+
+  // A role sees only the destinations it can open; a group left empty goes.
+  const nav = NAV.map((g) => ({ ...g, items: g.items.filter((i) => canVisit(i.href)) })).filter(
+    (g) => g.items.length > 0,
+  );
 
   const currentGroup =
-    NAV.find((g) => g.items.some((i) => isActive(pathname, i.href)))?.titleKey ?? NAV[0].titleKey;
+    nav.find((g) => g.items.some((i) => isActive(pathname, i.href)))?.titleKey ?? nav[0]?.titleKey;
 
   const [opened, setOpened] = useState<string[]>([]);
 
@@ -34,12 +41,13 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <nav className="flex flex-col py-2 divide-y divide-line/60">
-      {NAV.map((group) => {
+      {nav.map((group) => {
         const open = group.titleKey === currentGroup || opened.includes(group.titleKey);
         return (
-        <div key={group.titleKey} className="py-2 first:pt-0 last:pb-0">
+        <div key={group.titleKey} className="py-2 first:pt-0 last:pb-0" data-nav-group>
           <button
             type="button"
+            data-nav-group-header
             onClick={() => toggle(group.titleKey)}
             aria-expanded={open}
             className="w-full flex items-center gap-2 px-6 h-9 text-2xs font-semibold text-faint uppercase tracking-wider hover:text-muted transition-colors"
@@ -58,6 +66,7 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
                   <Link
                     href={item.href}
                     onClick={onNavigate}
+                    data-tour={`nav-${item.href}`}
                     aria-current={active ? "page" : undefined}
                     className={cn(
                       "flex items-center gap-3 h-10 px-3 rounded-sm text-xs transition-colors",
@@ -182,7 +191,7 @@ export function MobileNav() {
         </div>
         {/* The two preferences the top bar has no room for on a phone. */}
         <div className="hairline-t p-4 flex flex-col gap-3 shrink-0">
-          <RoleSwitcher variant="block" />
+          <AccountMenu variant="block" />
           <LocaleToggle block />
         </div>
       </div>
@@ -204,6 +213,7 @@ export function MobileNav() {
       onClick={() => setOpen((o) => !o)}
       aria-expanded={open}
       aria-label={t(open ? "action.close" : "app.name")}
+      data-tour="menu"
       style={{ top: 14, insetInlineStart: 8 }}
       className="lg:hidden fixed z-[60] text-muted hover:text-ink transition-colors p-2"
     >

@@ -87,7 +87,7 @@ export const EXPENSE_CATEGORIES: ExpenseCategory[] = [
 ];
 export const UNITS: Item["unit"][] = ["piece", "box", "set", "meter", "kg", "liter"];
 export const PARTY_KINDS = ["clinic", "hospital", "lab", "dealer", "other"] as const;
-export const ROLES = ["owner", "accountant", "sales", "technician", "viewer"] as const;
+export const ROLES = ["owner", "accounting", "service"] as const;
 export const PAYMENT_METHODS = ["cash", "bank", "cheque", "card"] as const;
 
 export function invoiceKey(s: InvoiceStatus): MessageKey {

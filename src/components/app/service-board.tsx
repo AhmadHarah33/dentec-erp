@@ -77,6 +77,7 @@ export function ServiceBoard({
   users,
   shortages,
   showDelivered,
+  readOnly = false,
 }: {
   jobs: ServiceJob[];
   customers: Customer[];
@@ -84,6 +85,8 @@ export function ServiceBoard({
   /** Job id → how many distinct parts it is short. */
   shortages: Record<string, number>;
   showDelivered: boolean;
+  /** For a role that can look at the workshop but not move its jobs. */
+  readOnly?: boolean;
 }) {
   const { t, locale } = useLocale();
   const [, startTransition] = useTransition();
@@ -367,6 +370,7 @@ export function ServiceBoard({
                 ) : (
                   cards.map((job) => (
                     <JobCard
+                      readOnly={readOnly}
                       key={job.id}
                       job={job}
                       customers={customers}
@@ -410,7 +414,9 @@ function JobCard({
   cardRef,
   onPointerDown,
   onMove,
+  readOnly,
 }: {
+  readOnly: boolean;
   job: ServiceJob;
   customers: Customer[];
   users: User[];
@@ -430,13 +436,16 @@ function JobCard({
   return (
     <div
       ref={cardRef}
-      onPointerDown={onPointerDown}
+      onPointerDown={readOnly ? undefined : onPointerDown}
       className={cn(
         "relative bg-surface border border-line rounded-sm p-3 flex flex-col gap-2",
         "select-none touch-pan-y",
         dragging
           ? "shadow-pop cursor-grabbing"
-          : "shadow-card hover:shadow-pop transition-shadow duration-[var(--dur-swift)] lg:cursor-grab",
+          : cn(
+              "shadow-card hover:shadow-pop transition-shadow duration-[var(--dur-swift)]",
+              !readOnly && "lg:cursor-grab",
+            ),
       )}
     >
       <div className="flex items-start gap-2">
@@ -448,6 +457,7 @@ function JobCard({
           <div className="text-2xs text-muted truncate">{customer}</div>
         </Link>
         {/* Touch has no drag, so every card also carries an explicit move menu. */}
+        {!readOnly && (
         <button
           type="button"
           onClick={() => setMenu((m) => !m)}
@@ -458,6 +468,7 @@ function JobCard({
         >
           <IconChevronDown size={14} />
         </button>
+        )}
       </div>
 
       <div className="flex items-center gap-1.5 flex-wrap">

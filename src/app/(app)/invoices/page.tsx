@@ -1,9 +1,11 @@
+import { requireSection } from "@/lib/session";
 import { snapshot } from "@/lib/data/repository";
 import { getI18n } from "@/lib/i18n/server";
 import { invoiceOutstanding, invoiceTotalBase } from "@/lib/queries";
 import { InvoicesClient, type InvoiceRow } from "./invoices-client";
 
 export default async function InvoicesPage() {
+  await requireSection("invoices");
   const { locale } = await getI18n();
   const db = await snapshot();
 

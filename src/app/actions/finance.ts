@@ -1,5 +1,6 @@
 "use server";
 
+import { deny } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { create, remove, update } from "@/lib/data/repository";
 import type { Expense, Payment } from "@/lib/data/types";
@@ -20,6 +21,8 @@ export async function savePayment(
   id: string | null,
   input: PaymentInput,
 ): Promise<Result<string>> {
+  const denied = await deny("finance.write");
+  if (denied) return denied;
   if (!input.partyId) return fail("msg.requiredField");
   if (input.amount <= 0) return fail("msg.requiredField");
 
@@ -33,6 +36,8 @@ export async function savePayment(
 }
 
 export async function deletePayment(id: string, invoiceId: string | null): Promise<Result> {
+  const denied = await deny("finance.write");
+  if (denied) return denied;
   await remove("payments", id);
   if (invoiceId) await syncStatus(invoiceId);
   refresh();
@@ -43,6 +48,8 @@ export async function saveExpense(
   id: string | null,
   input: ExpenseInput,
 ): Promise<Result<string>> {
+  const denied = await deny("finance.write");
+  if (denied) return denied;
   if (input.amount <= 0) return fail("msg.requiredField");
   if (!input.description.trim()) return fail("msg.requiredField");
 
@@ -53,6 +60,8 @@ export async function saveExpense(
 }
 
 export async function deleteExpense(id: string): Promise<Result> {
+  const denied = await deny("finance.write");
+  if (denied) return denied;
   await remove("expenses", id);
   refresh();
   return ok(undefined);

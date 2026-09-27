@@ -10,6 +10,8 @@
     "check": "tsc --outDir .check-out --skipLibCheck --module commonjs --target es2022 --moduleResolution node --strict false --esModuleInterop scripts/check-billing.ts && node .check-out/scripts/check-billing.js"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.117.2",
     "next": "^15.5.25",
     "playwright": "^1.63.0",
     "playwright-core": "^1.63.0",

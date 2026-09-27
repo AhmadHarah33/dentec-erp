@@ -1,3 +1,4 @@
+import { requireSection } from "@/lib/session";
 import { snapshot } from "@/lib/data/repository";
 import { getI18n } from "@/lib/i18n/server";
 import { buildStockIndex, onHand } from "@/lib/stock";
@@ -9,6 +10,7 @@ export default async function NewPurchasePage({
 }: {
   searchParams: Promise<{ supplier?: string }>;
 }) {
+  await requireSection("purchases");
   const { supplier } = await searchParams;
   const { locale } = await getI18n();
   const db = await snapshot();

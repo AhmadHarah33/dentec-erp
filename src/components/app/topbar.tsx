@@ -3,7 +3,7 @@
 import { Logo, MobileNav } from "./sidebar";
 import { GlobalSearch } from "./global-search";
 import { QuickCreate } from "./quick-create";
-import { RoleSwitcher } from "./role-switcher";
+import { AccountMenu } from "./account-menu";
 import { LocaleToggle } from "./locale-toggle";
 import type { SearchEntry } from "@/lib/search";
 
@@ -13,7 +13,7 @@ export function Topbar({ search }: { search: SearchEntry[] }) {
       <MobileNav />
       <Logo className="h-6 lg:hidden" />
 
-      <div className="flex-1 flex justify-center px-2">
+      <div className="flex-1 flex justify-center px-2" data-tour="search">
         <GlobalSearch entries={search} />
       </div>
 
@@ -22,7 +22,7 @@ export function Topbar({ search }: { search: SearchEntry[] }) {
             where there is room for them; the bar itself keeps only what fits
             beside the search field on a phone. */}
         <div className="hidden sm:block">
-          <RoleSwitcher />
+          <AccountMenu />
         </div>
         <QuickCreate />
         <div className="hidden lg:block">

@@ -8,12 +8,20 @@ import { LOCALE_COOKIE } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n/server";
 import { attachmentHeader, renderPdf } from "./render";
 import { loadDocument, pdfFilename, type DocumentKind } from "./document";
+import { getSessionUser } from "@/lib/session";
+import { canAccess } from "@/lib/permissions";
 
 export async function handlePdfRequest(
   request: NextRequest,
   kind: DocumentKind,
   id: string,
 ): Promise<Response> {
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!canAccess(user.role, kind === "invoice" ? "invoices" : "purchases")) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
   const locale = await getLocale();
 
   // Resolve the document first: a missing invoice should 404 immediately
@@ -37,9 +45,14 @@ export async function handlePdfRequest(
     const pdf = await renderPdf({
       url: `${origin}/print/${kind}/${id}`,
       origin,
-      // The print route reads the locale cookie like every other route; the
-      // headless browser has no cookies of its own, so it is handed ours.
-      cookies: [{ name: LOCALE_COOKIE, value: locale }],
+      // The print route reads the locale cookie like every other route, and
+      // with Supabase it sits behind sign-in. The headless browser has no
+      // cookies of its own, so it is handed the caller's — session included,
+      // which means it can only ever print what this user may see.
+      cookies: [
+        ...request.cookies.getAll().filter((c) => c.name !== LOCALE_COOKIE),
+        { name: LOCALE_COOKIE, value: locale },
+      ],
     });
 
     return new Response(new Uint8Array(pdf), {

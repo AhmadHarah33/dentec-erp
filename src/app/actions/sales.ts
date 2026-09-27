@@ -1,5 +1,6 @@
 "use server";
 
+import { deny } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { create, remove, snapshot, transaction, update } from "@/lib/data/repository";
 import type {
@@ -47,6 +48,8 @@ export async function saveInvoice(
   id: string | null,
   input: InvoiceInput,
 ): Promise<Result<string>> {
+  const denied = await deny("sales.write");
+  if (denied) return denied;
   const valid = validate(input.lines);
   if (!valid.ok) return valid;
   if (!input.customerId) return fail("msg.requiredField");
@@ -106,6 +109,8 @@ export async function setInvoiceBilling(
     localRate?: number;
   },
 ): Promise<Result> {
+  const denied = await deny("sales.write");
+  if (denied) return denied;
   const db = await snapshot();
   const invoice = db.salesInvoices.find((i) => i.id === id);
   if (!invoice) return fail("msg.error", "not-found");
@@ -137,6 +142,8 @@ export async function setInvoiceBilling(
 }
 
 export async function issueInvoice(id: string): Promise<Result> {
+  const denied = await deny("sales.write");
+  if (denied) return denied;
   const db = await snapshot();
   const invoice = db.salesInvoices.find((i) => i.id === id);
   if (!invoice) return fail("msg.error", "not-found");
@@ -192,6 +199,8 @@ export async function issueInvoice(id: string): Promise<Result> {
  * cannot be rewritten.
  */
 export async function voidInvoice(id: string): Promise<Result> {
+  const denied = await deny("sales.write");
+  if (denied) return denied;
   const db = await snapshot();
   const invoice = db.salesInvoices.find((i) => i.id === id);
   if (!invoice) return fail("msg.error", "not-found");
@@ -228,6 +237,8 @@ export async function voidInvoice(id: string): Promise<Result> {
 }
 
 export async function deleteInvoice(id: string): Promise<Result> {
+  const denied = await deny("sales.write");
+  if (denied) return denied;
   const db = await snapshot();
   const invoice = db.salesInvoices.find((i) => i.id === id);
   if (!invoice) return fail("msg.error", "not-found");
@@ -239,6 +250,7 @@ export async function deleteInvoice(id: string): Promise<Result> {
 
 /** Recompute paid/partial/issued from the payments actually recorded. */
 export async function syncStatus(invoiceId: string): Promise<void> {
+  if (await deny("sales.write")) return;
   const db = await snapshot();
   const invoice = db.salesInvoices.find((i) => i.id === invoiceId);
   if (!invoice || invoice.status === "draft" || invoice.status === "void") return;
@@ -262,6 +274,8 @@ export async function recordInvoicePayment(input: {
   reference: string;
   note: string;
 }): Promise<Result> {
+  const denied = await deny("sales.write");
+  if (denied) return denied;
   if (input.amount <= 0) return fail("msg.requiredField");
 
   const db = await snapshot();

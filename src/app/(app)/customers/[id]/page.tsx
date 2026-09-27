@@ -1,3 +1,5 @@
+import { getSessionUser } from "@/lib/session";
+import { can } from "@/lib/permissions";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { snapshot } from "@/lib/data/repository";
@@ -25,6 +27,9 @@ export default async function CustomerPage({
   const { id } = await params;
   const { locale, t } = await getI18n();
   const db = await snapshot();
+  const user = await getSessionUser();
+  // Service staff see the clinic and its machines' history, not its account.
+  const showMoney = Boolean(user && can(user.role, "money.view"));
 
   const customer = db.customers.find((c) => c.id === id);
   if (!customer) notFound();
@@ -55,13 +60,16 @@ export default async function CustomerPage({
         actions={
           <>
             <LinkButton href="/customers">{t("action.back")}</LinkButton>
-            <LinkButton href={`/invoices/new?customer=${customer.id}`} variant="primary">
-              {t("page.invoices.new")}
-            </LinkButton>
+            {user && can(user.role, "sales.write") && (
+              <LinkButton href={`/invoices/new?customer=${customer.id}`} variant="primary">
+                {t("page.invoices.new")}
+              </LinkButton>
+            )}
           </>
         }
       />
 
+      {showMoney && (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         <StatTile
           label={t("label.balance")}
@@ -88,6 +96,7 @@ export default async function CustomerPage({
           icon={IconDocument}
         />
       </div>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-1 h-fit">
@@ -121,6 +130,7 @@ export default async function CustomerPage({
         </Card>
 
         <div className="lg:col-span-2 min-w-0 flex flex-col gap-4">
+          {showMoney && (
           <Card>
             <CardHeader title={t("nav.invoices")} meta={String(invoices.length)} />
             {invoices.length === 0 ? (
@@ -174,6 +184,7 @@ export default async function CustomerPage({
               </div>
             )}
           </Card>
+          )}
 
           <Card>
             <CardHeader title={t("nav.service")} meta={String(jobs.length)} />
@@ -203,6 +214,7 @@ export default async function CustomerPage({
             )}
           </Card>
 
+          {showMoney && (
           <Card>
             <CardHeader title={t("page.accounting.payments")} meta={String(payments.length)} />
             {payments.length === 0 ? (
@@ -230,6 +242,7 @@ export default async function CustomerPage({
               </table>
             )}
           </Card>
+          )}
         </div>
       </div>
     </>

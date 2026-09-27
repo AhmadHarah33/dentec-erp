@@ -151,7 +151,12 @@ export interface DispatchInfo {
 /* People                                                              */
 /* ------------------------------------------------------------------ */
 
-export type Role = "owner" | "accountant" | "sales" | "technician" | "viewer";
+/**
+ * What a person may do. Enforced twice: by the app (nav, page guards, action
+ * checks in `src/lib/permissions.ts`) and, once Supabase is connected, by
+ * row-level security in the database — see `supabase/migrations`.
+ */
+export type Role = "owner" | "accounting" | "service";
 
 export interface User extends Base {
   name: string;
@@ -159,6 +164,10 @@ export interface User extends Base {
   phone: string;
   role: Role;
   active: boolean;
+  /** Set on invited accounts until the person replaces the temporary password. */
+  mustChangePassword?: boolean;
+  /** When the first-login walkthrough was finished or skipped. */
+  tourCompletedAt?: ISODateTime | null;
 }
 
 export type PartyKind = "clinic" | "hospital" | "lab" | "dealer" | "other";

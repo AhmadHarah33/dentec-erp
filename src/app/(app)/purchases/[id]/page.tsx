@@ -1,3 +1,4 @@
+import { requireSection } from "@/lib/session";
 import { notFound } from "next/navigation";
 import { snapshot } from "@/lib/data/repository";
 import { getI18n } from "@/lib/i18n/server";
@@ -8,6 +9,7 @@ export default async function PurchaseDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireSection("purchases");
   const { id } = await params;
   const { locale } = await getI18n();
   const db = await snapshot();

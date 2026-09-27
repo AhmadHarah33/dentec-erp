@@ -1,5 +1,6 @@
 "use server";
 
+import { deny } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { remove, snapshot, transaction, update } from "@/lib/data/repository";
 import type { ServiceJob, ServiceStatus } from "@/lib/data/types";
@@ -25,6 +26,8 @@ function nextNumber(existing: string[], prefix: string): string {
 }
 
 export async function saveJob(id: string | null, input: JobInput): Promise<Result<string>> {
+  const denied = await deny("service.write");
+  if (denied) return denied;
   if (!input.customerId) return fail("msg.requiredField");
   if (!input.reportedFault.trim()) return fail("msg.requiredField");
 
@@ -70,6 +73,8 @@ export async function saveJob(id: string | null, input: JobInput): Promise<Resul
  * are moved, so pressing the button twice cannot double-deduct.
  */
 export async function consumeParts(id: string): Promise<Result<number>> {
+  const denied = await deny("service.write");
+  if (denied) return denied;
   const db = await snapshot();
   const job = db.serviceJobs.find((j) => j.id === id);
   if (!job) return fail("msg.error", "not-found");
@@ -122,6 +127,8 @@ export async function consumeParts(id: string): Promise<Result<number>> {
 }
 
 export async function setJobStatus(id: string, status: ServiceStatus): Promise<Result> {
+  const denied = await deny("service.write");
+  if (denied) return denied;
   const patch: Partial<ServiceJob> = { status };
   if (status === "delivered") patch.closedAt = new Date().toISOString();
   else patch.closedAt = null;
@@ -131,6 +138,8 @@ export async function setJobStatus(id: string, status: ServiceStatus): Promise<R
 }
 
 export async function deleteJob(id: string): Promise<Result> {
+  const denied = await deny("service.write");
+  if (denied) return denied;
   const db = await snapshot();
   const job = db.serviceJobs.find((j) => j.id === id);
   if (!job) return fail("msg.error", "not-found");

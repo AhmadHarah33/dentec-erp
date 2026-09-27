@@ -1,5 +1,6 @@
 "use server";
 
+import { deny } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { snapshot, transaction } from "@/lib/data/repository";
 import type {
@@ -55,6 +56,8 @@ function refreshAll(jobId: string) {
  * numbers are yours to correct before it goes to the customer.
  */
 export async function invoiceJob(jobId: string): Promise<Result<string>> {
+  const denied = await deny("service.invoice");
+  if (denied) return denied;
   const db = await snapshot();
   const job = db.serviceJobs.find((j) => j.id === jobId);
   if (!job) return fail("msg.error", "not-found");
@@ -163,6 +166,8 @@ function lastSupplierFor(itemId: ID, orders: PurchaseOrder[]): ID | null {
  * Returns the ids created — one is the common case and the caller opens it.
  */
 export async function orderShortage(jobId: string): Promise<Result<string[]>> {
+  const denied = await deny("service.orderParts");
+  if (denied) return denied;
   const db = await snapshot();
   const job = db.serviceJobs.find((j) => j.id === jobId);
   if (!job) return fail("msg.error", "not-found");

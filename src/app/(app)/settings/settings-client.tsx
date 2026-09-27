@@ -28,7 +28,8 @@ export function SettingsClient({
   dataDir,
 }: {
   settings: Settings;
-  dataDir: string;
+  /** Where the demo JSON file lives; null when the data is in Supabase. */
+  dataDir: string | null;
 }) {
   const t = useT();
   const [pending, startTransition] = useTransition();
@@ -274,7 +275,8 @@ export function SettingsClient({
         </div>
       </Card>
 
-      {/* Data Location & Reset */}
+      {/* Data Location & Reset — demo store only; real data is never one click from gone. */}
+      {dataDir && (
       <div className="mt-6 p-4 rounded-sm border border-line bg-surface text-2xs text-muted">
         <p className="mb-2">{t("page.settings.dataLocation")}</p>
         <div className="flex items-center gap-2 mb-4">
@@ -288,6 +290,7 @@ export function SettingsClient({
           {t("action.reset")}
         </Button>
       </div>
+      )}
 
       {/* Feedback */}
       {saved && (

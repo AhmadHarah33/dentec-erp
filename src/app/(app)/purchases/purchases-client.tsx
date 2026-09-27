@@ -150,6 +150,8 @@ export function PurchasesClient({
         onRowClick={(r) => setViewing(r)}
         pageSize={40}
         emptyTitle={t("empty.purchases")}
+        emptyHint={t("empty.hint.purchases")}
+        emptyAction={<LinkButton href="/purchases/new" variant="primary">{t("dash.newPurchase")}</LinkButton>}
         filters={
           <>
             <Select

@@ -103,6 +103,7 @@ export function WarehousesClient({
         <Card>
           <EmptyState
             title={t("empty.none")}
+            hint={t("empty.hint.warehouses")}
             action={
               <Button variant="primary" onClick={openNew}>
                 {t("page.warehouses.new")}
@@ -129,7 +130,7 @@ export function WarehousesClient({
                     {warehouse.location || "—"}
                   </p>
                 </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
+                <div className="flex items-center gap-1 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
                   <Button
                     size="sm"
                     variant="ghost"

@@ -1,6 +1,6 @@
 import { snapshot } from "@/lib/data/repository";
 import { getI18n } from "@/lib/i18n/server";
-import { getViewRole } from "@/lib/roles.server";
+import { requireUser } from "@/lib/session";
 import { buildStockIndex, lowStock, stockValue } from "@/lib/stock";
 import {
   invoiceOutstanding,
@@ -54,21 +54,20 @@ import { countedPhrase, type CountedNoun } from "@/lib/plural";
  * and performance sits below, because "how was last month" is never the
  * question you open the app to answer.
  *
- * The view role reorders this and nothing else. Accounting leads with money
- * and drops the workshop; service leads with the workshop and drops revenue
- * figures it has no use for. No page is hidden either way: the role is a
- * preference, not a permission.
+ * The role decides what this leads with. Accounting leads with money and
+ * drops the workshop; service leads with the workshop and never sees a money
+ * figure — with Supabase connected its snapshot holds no invoices at all.
  */
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; denied?: string }>;
 }) {
   const { locale, t } = await getI18n();
-  const role = await getViewRole();
+  const { role } = await requireUser();
   const db = await snapshot();
   const { baseCurrency } = db.settings;
-  const { period } = await searchParams;
+  const { period, denied } = await searchParams;
   const trendMonths = period === "6" ? 6 : 12;
 
   const money = (n: number) => formatMoney(n, baseCurrency, locale);
@@ -377,7 +376,7 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
               {role === "accounting" && (
                 <LinkButton href="/accounting">{t("page.accounting.newPayment")}</LinkButton>
               )}
-              {role !== "accounting" && (
+              {role === "owner" && (
                 <LinkButton href="/purchases/new">{t("dash.newPurchase")}</LinkButton>
               )}
               {role === "owner" && <LinkButton href="/service">{t("dash.newJob")}</LinkButton>}
@@ -385,6 +384,12 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
           </>
         }
       />
+
+      {denied === "1" && (
+        <p role="status" className="mb-6 text-2xs font-medium text-warn bg-warn-soft border border-warn-line rounded-sm px-3 py-2">
+          {t("msg.denied")}
+        </p>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8 stagger">{tiles}</div>
 

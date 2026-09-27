@@ -1,5 +1,6 @@
 "use client";
 
+import { useRole } from "@/components/app/role-context";
 import { useMemo, useState, useTransition } from "react";
 import type { Customer, Item, ServiceJob, User } from "@/lib/data/types";
 import { useT } from "@/lib/i18n/context";
@@ -8,7 +9,7 @@ import { localName } from "@/lib/labels";
 import { formatNumber } from "@/lib/money";
 import { today, isInMonth, startOfMonth } from "@/lib/dates";
 import { saveJob } from "@/app/actions/service";
-import { PageHeader, StatTile, Toolbar } from "@/components/ui/page";
+import { EmptyState, PageHeader, StatTile, Toolbar } from "@/components/ui/page";
 import { IconCheck, IconLayers, IconPlus, IconSearch, IconWrench } from "@/components/ui/icons";
 import {
   Button,
@@ -46,6 +47,9 @@ export function ServiceClient({
   locale: string;
 }) {
   const t = useT();
+  const { can } = useRole();
+  const canWork = can("service.write");
+  const showMoney = can("money.view");
   const [pending, startTransition] = useTransition();
   const [query, setQuery] = useState("");
   const [technicianFilter, setTechnicianFilter] = useState("");
@@ -139,16 +143,18 @@ export function ServiceClient({
         title={t("page.service.title")}
         subtitle={t("service.dragHint")}
         actions={
-          <Button
-            variant="primary"
-            onClick={() => {
-              setError(null);
-              setNewJobOpen(true);
-            }}
-          >
-            <IconPlus />
-            {t("page.service.new")}
-          </Button>
+          canWork && (
+            <Button
+              variant="primary"
+              onClick={() => {
+                setError(null);
+                setNewJobOpen(true);
+              }}
+            >
+              <IconPlus />
+              {t("page.service.new")}
+            </Button>
+          )
         }
       />
 
@@ -224,7 +230,25 @@ export function ServiceClient({
         </Button>
       </Toolbar>
 
+      {jobs.length === 0 && (
+        <div className="border border-line bg-surface rounded-lg shadow-card mb-4">
+          <EmptyState
+            compact
+            title={t("empty.service")}
+            hint={t("empty.hint.service")}
+            action={
+              canWork && (
+                <Button variant="primary" onClick={() => setNewJobOpen(true)}>
+                  {t("page.service.new")}
+                </Button>
+              )
+            }
+          />
+        </div>
+      )}
+
       <ServiceBoard
+        readOnly={!canWork}
         jobs={filtered}
         customers={customers}
         users={users}
@@ -323,6 +347,7 @@ export function ServiceClient({
             </Select>
           </Field>
 
+          {showMoney && (
           <Field label={t("label.laborCharge")}>
             <NumberInput
               value={newJobForm.laborCharge}
@@ -332,6 +357,7 @@ export function ServiceClient({
               step="0.01"
             />
           </Field>
+          )}
 
           <label className="flex items-center gap-1.5 sm:col-span-2 cursor-pointer">
             <input

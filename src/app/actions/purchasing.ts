@@ -1,5 +1,6 @@
 "use server";
 
+import { deny } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { remove, snapshot, transaction, update } from "@/lib/data/repository";
 import type { PurchaseOrder } from "@/lib/data/types";
@@ -26,6 +27,8 @@ function nextNumber(existing: string[], prefix: string): string {
 }
 
 export async function saveOrder(id: string | null, input: OrderInput): Promise<Result<string>> {
+  const denied = await deny("purchases.write");
+  if (denied) return denied;
   if (!input.supplierId) return fail("msg.requiredField");
   if (input.lines.length === 0) return fail("empty.lines");
   if (input.lines.some((l) => l.qty <= 0)) return fail("msg.requiredField");
@@ -69,6 +72,8 @@ export async function saveOrder(id: string | null, input: OrderInput): Promise<R
  * landed-cost report possible later.
  */
 export async function receiveOrder(id: string, date: string): Promise<Result> {
+  const denied = await deny("purchases.write");
+  if (denied) return denied;
   const db = await snapshot();
   const order = db.purchaseOrders.find((o) => o.id === id);
   if (!order) return fail("msg.error", "not-found");
@@ -108,6 +113,8 @@ export async function receiveOrder(id: string, date: string): Promise<Result> {
 }
 
 export async function cancelOrder(id: string): Promise<Result> {
+  const denied = await deny("purchases.write");
+  if (denied) return denied;
   const db = await snapshot();
   const order = db.purchaseOrders.find((o) => o.id === id);
   if (!order) return fail("msg.error", "not-found");
@@ -118,6 +125,8 @@ export async function cancelOrder(id: string): Promise<Result> {
 }
 
 export async function deleteOrder(id: string): Promise<Result> {
+  const denied = await deny("purchases.write");
+  if (denied) return denied;
   const db = await snapshot();
   const order = db.purchaseOrders.find((o) => o.id === id);
   if (!order) return fail("msg.error", "not-found");

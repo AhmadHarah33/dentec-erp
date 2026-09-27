@@ -71,7 +71,7 @@ export function KpiTile({
               <TileIcon size={16} />
             </span>
           )}
-          <span className="text-2xs font-semibold tracking-wide uppercase text-faint truncate">
+          <span className="hidden sm:block text-2xs font-semibold tracking-wide uppercase text-faint truncate">
             {label}
           </span>
         </div>
@@ -81,6 +81,12 @@ export function KpiTile({
           </Badge>
         )}
       </div>
+      {/* Two tiles to a row on a phone leave no room for icon, label and chip
+          on one line — the label was truncating to a single letter. There it
+          gets a line of its own. */}
+      <span className="sm:hidden -mt-1 text-2xs font-semibold text-faint leading-snug line-clamp-2">
+        {label}
+      </span>
 
       <span className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight leading-none text-ink">
         <Num>{value}</Num>

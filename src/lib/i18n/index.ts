@@ -22,10 +22,8 @@ export function isLocale(v: unknown): v is Locale {
 }
 
 /**
- * Look up a message. `tr.ts` is now a complete mirror of `ar.ts` — every
- * `MessageKey` resolves in both locales, enforced at compile time by
- * `tr`'s `Record<MessageKey, string>` type. The `ar[key] ?? key` fallback
- * stays only as a defensive guard; it should never actually trigger.
+ * Look up a message. `tr.ts` may lag `ar.ts`; a missing Turkish key falls
+ * back to Arabic.
  *
  * `{name}` placeholders are replaced from `vars`.
  */

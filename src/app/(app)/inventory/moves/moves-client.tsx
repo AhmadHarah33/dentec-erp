@@ -1,5 +1,6 @@
 "use client";
 
+import { useRole } from "@/components/app/role-context";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { CurrencyCode, Item, StockMove, Warehouse } from "@/lib/data/types";
@@ -42,6 +43,7 @@ export function MovesClient({
   locale: string;
 }) {
   const t = useT();
+  const showMoney = useRole().can("money.view");
   const [type, setType] = useState("");
   const [warehouse, setWarehouse] = useState("");
   const [from, setFrom] = useState("");
@@ -64,7 +66,7 @@ export function MovesClient({
 
   const netUnits = useMemo(() => rows.reduce((s, m) => s + m.qtyDelta, 0), [rows]);
 
-  const columns: Column<StockMove>[] = [
+  const allColumns: Column<StockMove>[] = [
     {
       key: "date",
       header: t("label.date"),
@@ -154,6 +156,7 @@ export function MovesClient({
       },
     },
   ];
+  const columns = showMoney ? allColumns : allColumns.filter((c) => c.key !== "cost");
 
   return (
     <>
@@ -166,6 +169,7 @@ export function MovesClient({
         rowKey={(r) => r.id}
         pageSize={40}
         emptyTitle={t("empty.moves")}
+        emptyHint={t("empty.hint.moves")}
         filters={
           <>
             <Select

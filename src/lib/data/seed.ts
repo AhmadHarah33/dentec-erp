@@ -109,10 +109,10 @@ export function buildSeed(): Database {
   /* Users --------------------------------------------------------- */
   const users: User[] = [
     ["u1", "هارا أحمد", "hara@dentec.example", "owner"],
-    ["u2", "ليلى منصور", "laila@dentec.example", "accountant"],
-    ["u3", "سامر الخطيب", "samer@dentec.example", "sales"],
-    ["u4", "عمر يلماز", "omar@dentec.example", "technician"],
-    ["u5", "رنا حداد", "rana@dentec.example", "technician"],
+    ["u2", "ليلى منصور", "laila@dentec.example", "accounting"],
+    ["u3", "سامر الخطيب", "samer@dentec.example", "accounting"],
+    ["u4", "عمر يلماز", "omar@dentec.example", "service"],
+    ["u5", "رنا حداد", "rana@dentec.example", "service"],
   ].map(([id, name, email, role]) => ({
     ...stamp(id),
     name,

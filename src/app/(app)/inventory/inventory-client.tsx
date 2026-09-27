@@ -9,6 +9,7 @@ import { formatMoney, formatMoneyCompact, formatNumber } from "@/lib/money";
 import { stockHealth } from "@/lib/stock";
 import { today } from "@/lib/dates";
 import { adjustStock, transferStock } from "@/app/actions/stock";
+import { useRole } from "@/components/app/role-context";
 import { PageHeader, StatTile } from "@/components/ui/page";
 import { IconCoins, IconLayers, IconWarehouse } from "@/components/ui/icons";
 import {
@@ -46,6 +47,9 @@ export function InventoryClient({
   locale: string;
 }) {
   const t = useT();
+  const { can } = useRole();
+  const showMoney = can("money.view");
+  const canAdjust = can("stock.write");
   const [pending, startTransition] = useTransition();
   const [onlyLow, setOnlyLow] = useState(false);
   const [typeFilter, setTypeFilter] = useState("");
@@ -124,7 +128,7 @@ export function InventoryClient({
     });
   }
 
-  const columns: Column<InventoryRow>[] = [
+  const allColumns: Column<InventoryRow>[] = [
     {
       key: "sku",
       header: t("label.sku"),
@@ -230,6 +234,11 @@ export function InventoryClient({
       ),
     },
   ];
+  // Service staff see quantities, not what they are worth, and correct stock
+  // only through a job. The server refuses the actions either way.
+  const columns = allColumns.filter(
+    (c) => (showMoney || c.key !== "value") && (canAdjust || c.key !== "actions"),
+  );
 
   return (
     <>
@@ -237,12 +246,14 @@ export function InventoryClient({
       <PageTabs tabs={STOCK_TABS.map((x) => ({ href: x.href, label: t(x.labelKey) }))} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatTile
-          label={t("dash.stockValue")}
-          value={formatMoneyCompact(totals.value, currency, locale)}
-          icon={IconCoins}
-          meta={t("dash.atStandardCost")}
-        />
+        {showMoney && (
+          <StatTile
+            label={t("dash.stockValue")}
+            value={formatMoneyCompact(totals.value, currency, locale)}
+            icon={IconCoins}
+            meta={t("dash.atStandardCost")}
+          />
+        )}
         <StatTile
           label={t("label.quantity")}
           value={formatNumber(totals.units, locale, 0)}
@@ -268,6 +279,7 @@ export function InventoryClient({
         rowKey={(r) => r.item.id}
         pageSize={30}
         emptyTitle={t("empty.items")}
+        emptyHint={t("empty.hint.stock")}
         filters={
           <>
             <Select

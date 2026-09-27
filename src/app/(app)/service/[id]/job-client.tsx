@@ -1,5 +1,6 @@
 "use client";
 
+import { useRole } from "@/components/app/role-context";
 import { useMemo, useState, useTransition } from "react";
 import type {
   Customer,
@@ -85,6 +86,11 @@ export function JobClient({
   });
 
   const money = (n: number) => formatMoney(n, currency, locale);
+  const { can, canVisit } = useRole();
+  // Service staff work the job without its prices; the office bills it and
+  // can look but not change the work itself.
+  const showMoney = can("money.view");
+  const canWork = can("service.write");
 
   // Filter spare parts (not products) for the add part select
   const spareParts = items.filter((i) => i.itemType === "spare_part");
@@ -238,6 +244,7 @@ export function JobClient({
           <>
             <Badge tone={SERVICE_TONE[job.status]}>{t(serviceKey(job.status))}</Badge>
             {invoice ? (
+              canVisit("/invoices") && (
               <Link
                 href={`/invoices/${invoice.id}`}
                 className="inline-flex items-center gap-1.5 h-10 px-3 text-2xs font-semibold text-accent hover:bg-accent-soft rounded-sm transition-colors"
@@ -245,8 +252,9 @@ export function JobClient({
                 <IconDocument size={15} />
                 <Num>{invoice.number}</Num>
               </Link>
+              )
             ) : (
-              billable && (
+              billable && can("service.invoice") && (
                 <Button variant="primary" onClick={submitInvoice} disabled={pending}>
                   <IconDocument size={15} />
                   {t("service.createInvoice")}
@@ -279,7 +287,7 @@ export function JobClient({
                       : "text-ink border-line bg-surface hover:bg-sunken"
                 }
               `}
-              disabled={pending}
+              disabled={pending || !canWork}
             >
               {t(serviceKey(status))}
             </button>
@@ -302,10 +310,12 @@ export function JobClient({
             </p>
             <p className="text-2xs text-warn/70 mt-1">{t("service.shortageHint")}</p>
           </div>
-          <Button variant="primary" onClick={submitOrderShortage} disabled={pending}>
-            <IconCart size={15} />
-            {t("service.orderShortage")}
-          </Button>
+          {can("service.orderParts") && (
+            <Button variant="primary" onClick={submitOrderShortage} disabled={pending}>
+              <IconCart size={15} />
+              {t("service.orderShortage")}
+            </Button>
+          )}
         </div>
       )}
 
@@ -339,9 +349,11 @@ export function JobClient({
                 {t(job.underWarranty ? "label.active" : "label.inactive")}
               </Badge>
             </DetailRow>
-            <DetailRow label={t("label.laborCharge")}>
-              <Num>{money(job.laborCharge)}</Num>
-            </DetailRow>
+            {showMoney && (
+              <DetailRow label={t("label.laborCharge")}>
+                <Num>{money(job.laborCharge)}</Num>
+              </DetailRow>
+            )}
           </div>
 
           {/* Reported Fault */}
@@ -362,6 +374,7 @@ export function JobClient({
               <p className="text-2xs font-medium text-muted">
                 {t("label.diagnosis")}
               </p>
+              {canWork && (
               <Button
                 size="sm"
                 variant="ghost"
@@ -373,6 +386,7 @@ export function JobClient({
               >
                 {t("action.edit")}
               </Button>
+              )}
             </div>
             <p className="text-2xs leading-relaxed text-ink">
               {job.diagnosis || "—"}
@@ -406,12 +420,16 @@ export function JobClient({
                       <th className="h-10 px-3 text-end font-medium">
                         {t("label.qty")}
                       </th>
-                      <th className="h-10 px-3 text-end font-medium hidden md:table-cell">
-                        {t("label.unitPrice")}
-                      </th>
-                      <th className="h-10 px-3 text-end font-medium">
-                        {t("label.lineTotal")}
-                      </th>
+                      {showMoney && (
+                        <>
+                          <th className="h-10 px-3 text-end font-medium hidden md:table-cell">
+                            {t("label.unitPrice")}
+                          </th>
+                          <th className="h-10 px-3 text-end font-medium">
+                            {t("label.lineTotal")}
+                          </th>
+                        </>
+                      )}
                       <th className="h-10 px-3 text-center font-medium">
                         {t("label.status")}
                       </th>
@@ -447,6 +465,8 @@ export function JobClient({
                               {formatNumber(part.qty, locale)}
                             </Num>
                           </td>
+                          {showMoney && (
+                            <>
                           <td className="h-10 px-3 text-end hidden md:table-cell">
                             <Num className="text-2xs">{money(part.unitPrice)}</Num>
                           </td>
@@ -455,13 +475,15 @@ export function JobClient({
                               {money(part.qty * part.unitPrice)}
                             </Num>
                           </td>
+                            </>
+                          )}
                           <td className="h-10 px-3 text-center">
                             <Badge tone={part.consumed ? "success" : "muted"}>
                               {t(part.consumed ? "service.consumed" : "service.notConsumed")}
                             </Badge>
                           </td>
                           <td className="h-10 px-3 text-center">
-                            {!part.consumed && (
+                            {!part.consumed && canWork && (
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -481,6 +503,7 @@ export function JobClient({
             )}
 
             {/* Add Part Row ---------------------------------------- */}
+            {canWork && (
             <div className="px-3 py-2 hairline-t bg-sunken/30 grid sm:grid-cols-12 gap-2 items-end">
               <div className="sm:col-span-4">
                 <Field label={t("label.name")} className="text-2xs">
@@ -555,8 +578,10 @@ export function JobClient({
                 </Button>
               </div>
             </div>
+            )}
 
             {/* Totals Line ----------------------------------------- */}
+            {showMoney && (
             <div className="px-3 py-2 hairline-t flex items-center justify-between">
               <div className="text-xs font-medium">
                 {job.underWarranty ? (
@@ -565,7 +590,7 @@ export function JobClient({
                     <Num className="line-through text-faint">
                       {money(totals.jobTotal)}
                     </Num>{" "}
-                    <span className="text-accent">{money(0)}</span>
+                    <Num className="text-accent">{money(0)}</Num>
                   </span>
                 ) : (
                   <span>
@@ -577,9 +602,10 @@ export function JobClient({
                 )}
               </div>
             </div>
+            )}
 
             {/* Confirm Parts Button -------------------------------- */}
-            {hasUnconsumedParts && (
+            {hasUnconsumedParts && canWork && (
               <div className="px-3 py-2 hairline-t">
                 <Button
                   variant="primary"

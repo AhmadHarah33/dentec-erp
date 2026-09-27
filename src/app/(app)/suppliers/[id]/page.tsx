@@ -1,3 +1,4 @@
+import { requireSection } from "@/lib/session";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { snapshot } from "@/lib/data/repository";
@@ -20,6 +21,7 @@ export default async function SupplierPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireSection("suppliers");
   const { id } = await params;
   const { locale, t } = await getI18n();
   const db = await snapshot();

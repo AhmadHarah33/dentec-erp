@@ -1,9 +1,11 @@
+import { requireSection } from "@/lib/session";
 import { snapshot } from "@/lib/data/repository";
 import { getI18n } from "@/lib/i18n/server";
 import { buildStockIndex, onHand } from "@/lib/stock";
 import { ReportsClient } from "./reports-client";
 
 export default async function ReportsPage() {
+  await requireSection("reports");
   const { locale } = await getI18n();
   const db = await snapshot();
 

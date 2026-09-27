@@ -1,8 +1,10 @@
+import { requireSection } from "@/lib/session";
 import { snapshot } from "@/lib/data/repository";
 import { getI18n } from "@/lib/i18n/server";
 import { PurchasesClient } from "./purchases-client";
 
 export default async function PurchasesPage() {
+  await requireSection("purchases");
   const { locale } = await getI18n();
   const db = await snapshot();
 

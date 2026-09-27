@@ -5,7 +5,7 @@ import type { User } from "@/lib/data/types";
 import { useT } from "@/lib/i18n/context";
 import type { MessageKey } from "@/lib/i18n";
 import { ROLES } from "@/lib/labels";
-import { saveUser, deleteUser } from "@/app/actions/admin";
+import { saveUser, deleteUser, resetUserPassword } from "@/app/actions/admin";
 import { PageHeader } from "@/components/ui/page";
 import {
   Badge,
@@ -26,20 +26,25 @@ interface UserRow {
   jobsCount: number;
 }
 
-type UserInput = Omit<User, "id" | "createdAt" | "updatedAt">;
+type UserInput = Pick<User, "name" | "email" | "phone" | "role" | "active">;
 
 const BLANK: UserInput = {
   name: "",
   email: "",
   phone: "",
-  role: "viewer",
+  role: "service",
   active: true,
 };
 
 export function UsersClient({
   rows,
+  currentUserId,
+  accounts,
 }: {
   rows: UserRow[];
+  currentUserId: string;
+  /** True with Supabase: every row is a real login, created with a temporary password. */
+  accounts: boolean;
 }) {
   const t = useT();
   const [pending, startTransition] = useTransition();
@@ -48,6 +53,11 @@ export function UsersClient({
   const [form, setForm] = useState<UserInput>(BLANK);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<User | null>(null);
+  const [resetting, setResetting] = useState<User | null>(null);
+  /** A temporary password to hand over, shown exactly once. */
+  const [handover, setHandover] = useState<{ name: string; password: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const isSelf = editing?.id === currentUserId;
 
   function openNew() {
     setForm({ ...BLANK });
@@ -57,11 +67,8 @@ export function UsersClient({
   }
 
   function openEdit(user: User) {
-    const { id, createdAt, updatedAt, ...rest } = user;
-    void id;
-    void createdAt;
-    void updatedAt;
-    setForm(rest);
+    const { name, email, phone, role, active } = user;
+    setForm({ name, email, phone, role, active });
     setEditing(user);
     setError(null);
     setOpen(true);
@@ -72,12 +79,47 @@ export function UsersClient({
       setError(t("msg.requiredField"));
       return;
     }
+    if (accounts && !editing && !form.email.trim()) {
+      setError(t("users.emailRequired"));
+      return;
+    }
     setError(null);
     startTransition(async () => {
       const result = await saveUser(editing?.id ?? null, form);
-      if (result.ok) setOpen(false);
-      else setError(t(result.errorKey as MessageKey));
+      if (result.ok) {
+        setOpen(false);
+        if (result.data.tempPassword) {
+          setCopied(false);
+          setHandover({ name: form.name, password: result.data.tempPassword });
+        }
+      } else setError(t(result.errorKey as MessageKey));
     });
+  }
+
+  function confirmReset() {
+    if (!resetting) return;
+    const target = resetting;
+    startTransition(async () => {
+      const result = await resetUserPassword(target.id);
+      setResetting(null);
+      if (result.ok) {
+        setOpen(false);
+        setCopied(false);
+        setHandover({ name: target.name, password: result.data });
+      } else {
+        setError(t(result.errorKey as MessageKey));
+      }
+    });
+  }
+
+  async function copyPassword() {
+    if (!handover) return;
+    try {
+      await navigator.clipboard.writeText(handover.password);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
   }
 
   function confirmDelete() {
@@ -107,6 +149,11 @@ export function UsersClient({
           }`}
         >
           {r.user.name}
+          {r.user.id === currentUserId && (
+            <span className="ms-2">
+              <Badge tone="accent">{t("users.you")}</Badge>
+            </span>
+          )}
         </button>
       ),
     },
@@ -178,20 +225,22 @@ export function UsersClient({
         actions={
           <Button variant="primary" onClick={openNew}>
             <IconPlus />
-            {t("page.users.new")}
+            {accounts ? t("users.invite") : t("page.users.new")}
           </Button>
         }
       />
 
       <PageTabs tabs={SETTINGS_TABS.map((x) => ({ href: x.href, label: t(x.labelKey) }))} />
 
-      {/* Warning Banner */}
-      <div className="border border-warn-soft bg-warn-soft rounded-sm p-3 text-2xs text-warn flex items-start gap-2 mb-4">
-        <IconAlert className="flex-shrink-0 mt-0.5" />
-        <div>
-          {t("page.users.noAuthWarning")}
+      {/* Demo: these are names, not logins. With accounts: how an invite works. */}
+      {accounts ? (
+        <p className="text-2xs text-muted leading-relaxed mb-4">{t("users.inviteHint")}</p>
+      ) : (
+        <div className="border border-warn-line bg-warn-soft rounded-sm p-3 text-2xs text-warn flex items-start gap-2 mb-4">
+          <IconAlert className="flex-shrink-0 mt-0.5" />
+          <div>{t("page.users.noAuthWarning")}</div>
         </div>
-      </div>
+      )}
 
       <DataTable<UserRow>
         rows={rows}
@@ -209,10 +258,10 @@ export function UsersClient({
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title={editing ? t("action.edit") : t("page.users.new")}
+        title={editing ? t("action.edit") : accounts ? t("users.invite") : t("page.users.new")}
         footer={
           <div className="flex items-center justify-between gap-2">
-            {editing && (
+            {editing && !isSelf && (
               <Button
                 variant="danger"
                 onClick={() => setConfirming(editing)}
@@ -220,6 +269,11 @@ export function UsersClient({
               >
                 <IconTrash />
                 {t("action.delete")}
+              </Button>
+            )}
+            {editing && accounts && !isSelf && (
+              <Button variant="ghost" onClick={() => setResetting(editing)} disabled={pending}>
+                {t("users.resetPassword")}
               </Button>
             )}
             <div className="flex-1" />
@@ -248,9 +302,10 @@ export function UsersClient({
               autoFocus
             />
           </Field>
-          <Field label={t("label.email")}>
+          <Field label={t("label.email")} required={accounts}>
             <Input
               type="email"
+              dir="ltr"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
             />
@@ -261,9 +316,10 @@ export function UsersClient({
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
             />
           </Field>
-          <Field label={t("label.role")} required>
+          <Field label={t("label.role")} required hint={t(`users.roleHint.${form.role}` as MessageKey)}>
             <Select
               value={form.role}
+              disabled={isSelf}
               onChange={(e) => setForm({ ...form, role: e.target.value as User["role"] })}
             >
               {ROLES.map((role) => (
@@ -276,6 +332,7 @@ export function UsersClient({
           <label className="flex items-center gap-2 text-xs cursor-pointer pt-1">
             <input
               type="checkbox"
+              disabled={isSelf}
               checked={form.active}
               onChange={(e) => setForm({ ...form, active: e.target.checked })}
               className="accent-[var(--color-accent)]"
@@ -287,6 +344,43 @@ export function UsersClient({
           <p className="text-2xs text-danger mt-3">{error}</p>
         )}
       </Modal>
+
+      {/* Temporary password handover — shown once, never stored in the page. */}
+      <Modal
+        open={handover !== null}
+        onClose={() => setHandover(null)}
+        title={t("users.tempPasswordTitle")}
+        footer={
+          <div className="flex justify-end">
+            <Button variant="primary" onClick={() => setHandover(null)}>
+              {t("action.close")}
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-xs text-muted leading-relaxed mb-4">
+          {handover ? t("users.tempPasswordBody", { name: handover.name }) : null}
+        </p>
+        <div className="flex items-center gap-2">
+          <code
+            dir="ltr"
+            className="num flex-1 min-w-0 h-11 px-3 grid items-center rounded-sm border border-line bg-sunken text-sm font-semibold tracking-wider select-all truncate"
+          >
+            {handover?.password}
+          </code>
+          <Button onClick={copyPassword}>{copied ? t("users.copied") : t("users.copy")}</Button>
+        </div>
+      </Modal>
+
+      <Confirm
+        open={resetting !== null}
+        onClose={() => setResetting(null)}
+        onConfirm={confirmReset}
+        title={t("users.resetPassword")}
+        message={t("users.resetConfirm")}
+        confirmLabel={t("users.resetPassword")}
+        pending={pending}
+      />
 
       {/* Delete Confirmation */}
       <Confirm
