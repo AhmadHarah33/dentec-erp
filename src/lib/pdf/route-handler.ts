@@ -36,10 +36,15 @@ export async function handlePdfRequest(
   // forwarded headers are what say where this app actually answers.
   const forwardedHost = request.headers.get("x-forwarded-host");
   const forwardedProto = request.headers.get("x-forwarded-proto");
+  // APP_INTERNAL_URL wins when set: in Docker the headless browser should
+  // load the print page straight from this container (http://127.0.0.1:3000)
+  // rather than go out through the Cloudflare tunnel — faster, and it still
+  // works when Cloudflare Access sits in front of the public hostname.
   const origin =
-    forwardedHost && forwardedProto
+    process.env.APP_INTERNAL_URL?.replace(/\/+$/, "") ||
+    (forwardedHost && forwardedProto
       ? `${forwardedProto}://${forwardedHost}`
-      : request.nextUrl.origin;
+      : request.nextUrl.origin);
 
   try {
     const pdf = await renderPdf({

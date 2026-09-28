@@ -1,6 +1,6 @@
 # Project state
 
-Last updated: 2026-09-08
+Last updated: 2026-09-28
 
 ## What this is
 
@@ -13,9 +13,11 @@ exposed through a tunnel. Arabic now, Turkish later.
 | Area | Decision |
 |---|---|
 | Hosting | Self-hosted, tunnel in front |
-| Database | None yet — JSON file behind a repository interface; Supabase (self-hosted, via CLI) later |
+| Database | Self-hosted Supabase (Postgres) behind the repository interface; the JSON file remains as the offline demo when no Supabase env is set |
 | Accounting | Invoices, payments, balances. No double-entry |
-| Auth | **None in v1.** Users and roles exist as data only |
+| Auth | Supabase email + password. Owner invites with a one-time temporary password; no public sign-up, no SMTP |
+| Roles | owner / accounting / service, enforced in app and by RLS. Service sees no money |
+| Onboarding | First-run setup wizard; per-role spotlight walkthrough on first sign-in |
 | Invoicing | Per-line VAT, discounts, printable A4, multi-currency |
 | Visual style | White surfaces on a cool near-white canvas, single navy accent taken from the logo, Cairo, faint two-step elevation |
 | Currency | Base currency in Settings, default USD |
@@ -306,19 +308,30 @@ the Supabase migration, and it is a change to `store.ts` only.
 
 ## Open items
 
-- **No authentication.** The tunnel URL is fully open, accounting included.
-  Needs Cloudflare Access or a Tailscale ACL in front until Supabase Auth lands.
-  This was the user's explicit choice, not an oversight.
+- Catalog prices are hidden from service staff in the UI, but `items` rows are
+  readable by every role in the database (technicians need the parts list).
+  Everything else money-related — invoices, orders, payments, expenses,
+  suppliers — is invisible to service at the RLS level.
+- Document lines and service-job parts are stored as `jsonb` on their parent
+  row, not as child tables. They are always read with the document; move them
+  out if SQL-side line reporting is ever needed.
 - Purchase orders receive in full only — no partial receipts.
 - Stock valued at standard cost, not moving average. Reports says so on screen.
-- JSON storage suits a small team; not built for heavy concurrent writes. The
-  repository interface is what keeps the Supabase move cheap.
+- Writes are serialised by one version counter (`app_meta.version`): right
+  for a team of a few people, not for hundreds of concurrent writers.
 - `tr.ts` is a partial translation that falls back to Arabic. Finishing Turkish
   is a translation pass over that one file, not a code change.
 
 ## Next likely steps
 
-1. Supabase migration: write `supabase-adapter.ts` against the same repository
-   interface, swap one line in `src/lib/data/store.ts`.
-2. Auth on top of Supabase, then enforce the existing role map server-side.
-3. Partial receipts on purchase orders.
+1. Partial receipts on purchase orders.
+2. Turkish pass over the keys added with Supabase (auth, setup, users, tour).
+
+## Supabase and multi-user — 2026-09-28
+
+- `store-supabase.ts` implements the store contract over `get_snapshot()` /
+  `apply_changes()`; verified by loading the full demo dataset through it into
+  Postgres 16 and reading it back field-for-field, five concurrent writers
+  racing for invoice numbers, and the RLS matrix per role.
+- `docs/DEPLOY.md` is the runbook: migration, env, Docker on ZimaOS next to
+  Supabase, Cloudflare tunnel, first run, inviting the team.

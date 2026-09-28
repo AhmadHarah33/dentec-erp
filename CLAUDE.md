@@ -41,7 +41,12 @@ npx tsc --noEmit       # must be silent before you call anything done
 - **Stock is an append-only ledger.** `stockMoves` is never mutated or deleted;
   on-hand is always derived by summing it. Corrections are opposing moves.
 - **All storage goes through `src/lib/data/repository.ts`.** Never touch the
-  filesystem from a page or action.
+  filesystem or Supabase from a page or action. Behind it sit two stores with
+  one contract: `store-supabase.ts` when `SUPABASE_URL` + anon key are set,
+  `store.ts` (JSON demo) otherwise. A write is a callback that edits a
+  snapshot; the Supabase store diffs it and applies it with `apply_changes()`
+  in one version-checked transaction, retrying on conflict — so the callback
+  must be safe to run twice.
 - **Store state lives on `globalThis`** (`src/lib/data/store.ts`). Next bundles
   server components and server actions separately, so a module-level `let`
   gives you two caches and stale renders. Do not "simplify" this back.
@@ -55,13 +60,26 @@ npx tsc --noEmit       # must be silent before you call anything done
   Editing navigates. See `src/components/ui/drawer.tsx`.
 - **The sidebar holds thirteen destinations.** Configuration goes under
   `/settings` as a tab; a second view of the same data is a tab on its page.
-- **The view role is not security.** `ViewRole` (owner/accounting/service) sits
-  in a cookie and only reorders the dashboard.
+- **Roles are permissions.** `Role` = owner / accounting / service. The table
+  is `src/lib/permissions.ts`; pages call `requireSection()`, every server
+  action starts with `deny(capability)`, client components hide with
+  `useRole().can()`. With Supabase, RLS in `supabase/migrations` enforces the
+  same split — change both together. In demo mode the role comes from a cookie
+  (the account menu's "act as" list) so every role can be tried offline.
+- **Service staff never see money.** Gate prices, costs, balances and stock
+  value on `can("money.view")`.
 - **Service jobs are a board, not a table.** Cards must support both drag and
   an explicit move menu — touch has no drag.
 
+- **Schema changes are migrations.** Add a new file under
+  `supabase/migrations/`, and a new field on a type in `types.ts` needs a
+  column (camelCase field ↔ snake_case column, mapped in `store-supabase.ts`).
+  An optional TS field (`field?:`) must be listed in `OPTIONAL` there.
+
 ## Scope boundaries
 
-There is no authentication. Roles are organisational only. Do not add auth
-plumbing unless asked — it is planned to arrive with Supabase. The `ViewRole`
-cookie is a display preference and must not grow into a permission system.
+Authentication is Supabase email + password, created by the owner (no public
+sign-up, no SMTP required). Deployment is described in `docs/DEPLOY.md`. The
+first-login walkthrough lives in `src/components/app/tour.tsx`; its targets
+are `data-tour` attributes, so renaming a nav item or moving the search box
+means checking the tour.

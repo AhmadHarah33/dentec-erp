@@ -9,8 +9,11 @@ Read this before writing any page. Match it exactly; consistency is the point.
   `<route>-client.tsx`. **Never pass a function from a server page to a client
   component** — it throws at runtime. Pass `currency` and `locale` strings and
   format inside the client.
-- Mutations live in `src/app/actions/*.ts` and already exist. Do not write new
-  ones. They return `Result<T>` = `{ok:true,data} | {ok:false,errorKey,detail?}`.
+- Mutations live in `src/app/actions/*.ts`. They return `Result<T>` =
+  `{ok:true,data} | {ok:false,errorKey,detail?}`, and each begins with
+  `const denied = await deny("<capability>"); if (denied) return denied;`.
+- A page in a restricted section begins with `await requireSection("<section>")`
+  (`src/lib/session.ts`).
 - Dynamic route params are a Promise: `{ params }: { params: Promise<{id:string}> }`,
   then `const { id } = await params;`.
 
@@ -93,19 +96,20 @@ IconFilter, IconExternal, IconGlobe, plus the nav glyphs (IconDashboard, IconTag
 IconTooth, IconWrench, IconLayers, IconSwap, IconWarehouse, IconDocument,
 IconCart, IconUsers, IconTruck, IconCoins, IconChart, IconUser, IconSettings).
 
-## Navigation and the view role
+## Navigation and roles
 
 Thirteen sidebar destinations, no more. Configuration that changes a few times
 a year (warehouses, users) lives under `/settings` as a tab; a view of a page
 you are already on (the stock ledger) is a tab on that page. Anything you add
 must earn a permanent slot in a list read every day.
 
-`src/lib/roles.ts` — `ViewRole` = owner | accounting | service, in a cookie,
-read on the server with `getViewRole()` from `roles.server.ts` and exposed to
-the client through `RoleProvider`/`useRole`. **It is a view preference, not
-security**: it reorders the dashboard and nothing else. No page is hidden, no
-action is blocked. Real permissions arrive with Supabase; do not build them on
-top of this.
+The signed-in user comes from `getSessionUser()` (`src/lib/session.ts`) and
+reaches the client through `RoleProvider`/`useRole()`, which also offers
+`can(capability)` and `canVisit(href)`. The sidebar, quick-create menu and
+global search already filter by role. **Who may do what is decided only in
+`src/lib/permissions.ts`** — never compare role names at a call site to gate
+a feature; add a capability instead. The dashboard is the one place that
+arranges itself by role name.
 
 ## Motion
 
@@ -191,7 +195,7 @@ startTransition(async () => {
 **Every user-visible string goes through `t("some.key")`.** Never hardcode Arabic
 or English in a component. Keys live in `src/lib/i18n/ar.ts` — read it first and
 reuse existing keys. If you genuinely need a new key, add it to `ar.ts` (and only
-`ar.ts`; Turkish falls back automatically).
+`ar.ts`; `tr.ts` is a partial map and a missing Turkish key falls back to Arabic).
 
 ## Visual rules — non-negotiable
 

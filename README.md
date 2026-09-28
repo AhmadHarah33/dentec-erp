@@ -14,23 +14,16 @@ On first start the app writes `data/dentec.json` with twelve months of
 realistic demo data. Delete that file to start clean; Settings → إعادة تعيين
 lays the demo data down again.
 
-## Deploying to your own server
+## Connecting Supabase (multi-user)
 
-```bash
-npm ci
-npm run build
-DENTEC_DATA_DIR=/var/lib/dentec npm start
-```
+Set `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY`
+(see `.env.example`), run the migration in `supabase/migrations/`, and open
+the app: an empty database starts the first-run setup. Full runbook —
+Docker next to a self-hosted Supabase, Cloudflare tunnel, inviting the team —
+in **[docs/DEPLOY.md](docs/DEPLOY.md)**.
 
-Then put a tunnel in front (`cloudflared tunnel --url http://localhost:3000`,
-or Tailscale Funnel).
-
-> **There is no login.** Anyone who can reach the tunnel URL has full access,
-> accounting included. Put Cloudflare Access or a Tailscale ACL in front of it
-> until Supabase Auth is added. The roles on the Users page organise the team;
-> they do not restrict anything yet.
-
-Back up by copying the data directory. That is the whole database.
+Without those variables the app runs as a single-user offline demo on sample
+data, with an "act as" role menu so each role can be tried.
 
 ## How it is put together
 
@@ -41,9 +34,10 @@ Back up by copying the data directory. That is the whole database.
 
 ### Storage
 
-Everything lives in one JSON file behind `src/lib/data/repository.ts`. Pages and
-actions import from there and never touch the filesystem, so moving to Supabase
-means writing one adapter and changing one line in `src/lib/data/store.ts`.
+Everything goes through `src/lib/data/repository.ts`. Behind it: Postgres via
+`store-supabase.ts` when Supabase is configured, one JSON file via `store.ts`
+otherwise. Both give actions a snapshot to edit; the Supabase store diffs it
+and applies the change in one version-checked transaction.
 
 Writes are serialised through a queue and committed atomically (temp file +
 rename), and a document plus its stock moves are written in a single
@@ -106,4 +100,4 @@ src/components/app/  shared feature components
 - No authentication (see the warning above).
 - Purchase orders receive in full only — no partial receipts yet.
 - Stock is valued at standard cost, not moving average. The Reports page says so.
-- JSON storage suits a small team; it is not built for heavy concurrent writes.
+- Writes are serialised by one version counter: right for a small team.
