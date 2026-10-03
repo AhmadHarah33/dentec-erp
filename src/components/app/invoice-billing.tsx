@@ -34,6 +34,7 @@ import { DetailRow } from "@/components/ui/page";
 import { Modal } from "@/components/ui/modal";
 import { IconAlert } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/toast";
+import { useCan } from "@/components/app/member-context";
 
 const BLANK_DISPATCH: DispatchInfo = {
   vehiclePlate: "",
@@ -62,6 +63,7 @@ export function InvoiceBilling({
   customer: Customer | null;
 }) {
   const { t } = useLocale();
+  const canEdit = useCan("invoices", "limited");
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -100,7 +102,7 @@ export function InvoiceBilling({
       <CardHeader
         title={t("billing.region")}
         action={
-          <Button onClick={() => setOpen(true)}>{t("action.edit")}</Button>
+          canEdit && <Button onClick={() => setOpen(true)}>{t("action.edit")}</Button>
         }
       />
       <div className="p-4 pt-0">

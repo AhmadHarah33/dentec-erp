@@ -33,6 +33,7 @@ import { Drawer, DrawerSection } from "@/components/ui/drawer";
 import { DetailRow } from "@/components/ui/page";
 import { IconPlus, IconSearch, IconTag } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/toast";
+import { useCan } from "@/components/app/member-context";
 
 interface Props {
   itemType: ItemType;
@@ -90,6 +91,8 @@ export function ItemsClient({
   locale,
 }: Props) {
   const t = useT();
+  // Courtesy only: the server action refuses on its own.
+  const canEdit = useCan("catalog", "edit");
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -254,10 +257,12 @@ export function ItemsClient({
         title={title}
         subtitle={subtitle}
         actions={
-          <Button variant="primary" onClick={openNew}>
-            <IconPlus />
-            {newLabel}
-          </Button>
+          canEdit && (
+            <Button variant="primary" onClick={openNew}>
+              <IconPlus />
+              {newLabel}
+            </Button>
+          )
         }
       />
 
@@ -446,7 +451,7 @@ export function ItemsClient({
               title={query ? t("empty.noResults") : t("empty.items")}
               hint={query ? t("empty.noResultsHint") : undefined}
               action={
-                !query && (
+                !query && canEdit && (
                   <Button variant="primary" onClick={openNew}>
                     {newLabel}
                   </Button>
@@ -718,7 +723,7 @@ export function ItemsClient({
           )
         }
         footer={
-          viewing && (
+          viewing && canEdit && (
             <Button
               variant="primary"
               className="w-full"

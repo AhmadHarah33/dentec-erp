@@ -159,6 +159,8 @@ export interface User extends Base {
   phone: string;
   role: Role;
   active: boolean;
+  // Sign-in credentials live in erp.credentials, deliberately outside this
+  // type: the users list is sent to the browser, password hashes must not be.
 }
 
 export type PartyKind = "clinic" | "hospital" | "lab" | "dealer" | "other";

@@ -4,16 +4,23 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { LOCALE_COOKIE } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n/server";
 import { attachmentHeader, renderPdf } from "./render";
 import { loadDocument, pdfFilename, type DocumentKind } from "./document";
+import { currentMember } from "@/lib/auth/server";
+import { can } from "@/lib/permissions";
 
 export async function handlePdfRequest(
   request: NextRequest,
   kind: DocumentKind,
   id: string,
 ): Promise<Response> {
+  const member = await currentMember();
+  if (!member) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  if (!can(member.role, kind === "invoice" ? "invoices" : "purchasing", "view")) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
   const locale = await getLocale();
 
   // Resolve the document first: a missing invoice should 404 immediately
@@ -24,22 +31,21 @@ export async function handlePdfRequest(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  // Behind a tunnel or a proxy the request URL is the internal one, so the
-  // forwarded headers are what say where this app actually answers.
-  const forwardedHost = request.headers.get("x-forwarded-host");
-  const forwardedProto = request.headers.get("x-forwarded-proto");
-  const origin =
-    forwardedHost && forwardedProto
-      ? `${forwardedProto}://${forwardedHost}`
-      : request.nextUrl.origin;
+  // The headless browser fetches the print page from this same server over
+  // its internal address, not the public one: no round trip out through the
+  // tunnel and back. INTERNAL_ORIGIN is set in production (the container's
+  // own http://127.0.0.1:3000); in development the request origin is local.
+  const origin = (process.env.INTERNAL_ORIGIN ?? request.nextUrl.origin).replace(/\/$/, "");
 
   try {
     const pdf = await renderPdf({
       url: `${origin}/print/${kind}/${id}`,
       origin,
-      // The print route reads the locale cookie like every other route; the
-      // headless browser has no cookies of its own, so it is handed ours.
-      cookies: [{ name: LOCALE_COOKIE, value: locale }],
+      // The print route is members-only and reads the locale cookie, and the
+      // headless browser has no cookies of its own — so it is handed this
+      // request's: the session (so it is signed in as the same person, with
+      // the same permissions) and the locale.
+      cookies: request.cookies.getAll().map((c) => ({ name: c.name, value: c.value })),
     });
 
     return new Response(new Uint8Array(pdf), {

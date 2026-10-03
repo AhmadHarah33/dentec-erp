@@ -99,6 +99,34 @@ never committed.
   Rule: never reset, recreate, restart or delete anything Supabase without
   explicit approval.
 
+## Phase 3 — code complete 2026-10-04, awaiting owner account + approval
+
+**Decision (owner):** the ERP has its OWN accounts, not Supabase Auth. Reason:
+the owner's other project's tables (`memories`, `song_of_the_day`,
+`app_config`) grant read/update/delete to ANY authenticated Supabase user, so
+ERP staff with Supabase accounts could have touched that data. No Supabase
+keys or packages are used by the app.
+
+**Built:** `0002_accounts.sql` (erp.credentials / sessions / auth_tokens);
+`src/lib/auth/` (scrypt passwords, hashed 14-day session cookie, lockout after
+5 wrong passwords, single-use 24h invite/reset links stored hashed);
+`src/lib/permissions.ts` (role matrix) enforced in every action and page,
+print and PDF; login / accept / forgot pages; Users page with link issuing;
+middleware sends cookie-less requests to `/login`.
+
+**Verified locally (throwaway PGlite db):** invite link sets a password and
+signs in; a spent link is refused; revoked session lands on login; technician
+is refused invoices, purchasing, accounting, reports and settings; typecheck
+and `npm run build` clean.
+
+**Still to do before the checkpoint:**
+1. `0002_accounts.sql` is NOT yet applied to the server (`npm run db:migrate`
+   with the admin URL, as in Phase 2).
+2. Create the owner account on the server:
+   `DATABASE_URL=… APP_URL=… npx tsx scripts/create-owner.ts --email <owner email> --name "<name>"`
+   (needs the owner's login email; prints a one-time link).
+3. Owner confirms the role matrix, then Phase 4.
+
 ## Phase 3 — Accounts
 
 - Login, set-password (from invite), forgot/reset password, sign-out and a

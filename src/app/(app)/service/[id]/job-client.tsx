@@ -35,6 +35,7 @@ import {
 import { IconAlert, IconCart, IconDocument } from "@/components/ui/icons";
 import { Modal, Confirm } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
+import { useCan } from "@/components/app/member-context";
 
 /** A shortage row, already resolved to a name by the server page. */
 interface NamedShortage {
@@ -69,6 +70,11 @@ export function JobClient({
   locale: string;
 }) {
   const t = useT();
+  // A technician runs the job; raising its invoice and ordering its parts
+  // belong to other areas of the permission table.
+  const canEdit = useCan("service", "edit");
+  const canInvoice = useCan("invoices", "limited");
+  const canOrder = useCan("purchasing", "edit");
   const toast = useToast();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -250,7 +256,7 @@ export function JobClient({
                 <Num>{invoice.number}</Num>
               </Link>
             ) : (
-              billable && (
+              billable && canInvoice && (
                 <Button variant="primary" onClick={submitInvoice} disabled={pending}>
                   <IconDocument size={15} />
                   {t("service.createInvoice")}
@@ -284,7 +290,7 @@ export function JobClient({
                       : "text-ink border-line bg-surface hover:bg-sunken"
                 }
               `}
-              disabled={pending}
+              disabled={pending || !canEdit}
             >
               {t(serviceKey(status))}
             </button>
@@ -307,10 +313,12 @@ export function JobClient({
             </p>
             <p className="text-2xs text-warn/70 mt-1">{t("service.shortageHint")}</p>
           </div>
-          <Button variant="primary" onClick={submitOrderShortage} disabled={pending}>
+          {canOrder && (
+<Button variant="primary" onClick={submitOrderShortage} disabled={pending}>
             <IconCart size={15} />
             {t("service.orderShortage")}
           </Button>
+)}
         </div>
       )}
 
@@ -367,7 +375,8 @@ export function JobClient({
               <p className="text-2xs font-medium text-muted">
                 {t("label.diagnosis")}
               </p>
-              <Button
+              {canEdit && (
+<Button
                 size="sm"
                 variant="ghost"
                 onClick={() => {
@@ -378,6 +387,7 @@ export function JobClient({
               >
                 {t("action.edit")}
               </Button>
+)}
             </div>
             <p className="text-2xs leading-relaxed text-ink">
               {job.diagnosis || "—"}
@@ -464,7 +474,7 @@ export function JobClient({
                             </Badge>
                           </td>
                           <td className="h-10 px-3 text-center">
-                            {!part.consumed && (
+                            {!part.consumed && canEdit && (
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -484,7 +494,8 @@ export function JobClient({
             )}
 
             {/* Add Part Row ---------------------------------------- */}
-            <div className="px-3 py-2 hairline-t bg-sunken/30 grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
+            {canEdit && (
+<div className="px-3 py-2 hairline-t bg-sunken/30 grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
               <div className="sm:col-span-4">
                 <Field label={t("label.name")} className="text-2xs">
                   <Select
@@ -558,6 +569,7 @@ export function JobClient({
                 </Button>
               </div>
             </div>
+)}
 
             {/* Totals Line ----------------------------------------- */}
             <div className="px-4 h-12 hairline-t flex items-center justify-between gap-3 text-xs">
@@ -573,7 +585,7 @@ export function JobClient({
             </div>
 
             {/* Confirm Parts Button -------------------------------- */}
-            {hasUnconsumedParts && (
+            {hasUnconsumedParts && canEdit && (
               <div className="px-3 py-2 hairline-t">
                 <Button
                   variant="primary"

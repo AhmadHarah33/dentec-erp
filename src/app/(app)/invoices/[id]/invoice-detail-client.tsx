@@ -39,6 +39,7 @@ import { IconPrint } from "@/components/ui/icons";
 import { DownloadPdfButton } from "@/components/app/download-pdf";
 import { InvoiceBilling } from "@/components/app/invoice-billing";
 import { DateInput } from "@/components/ui/date-input";
+import { useCan } from "@/components/app/member-context";
 
 interface LineItem {
   id: string;
@@ -67,6 +68,11 @@ export function InvoiceDetailClient({
   locale: string;
 }) {
   const t = useT();
+  // Sales may draft and issue; voiding needs full invoice rights; taking
+  // money is a finance action. The server checks each again.
+  const canDraft = useCan("invoices", "limited");
+  const canVoid = useCan("invoices", "edit");
+  const canPay = useCan("finance", "edit");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   const [confirming, setConfirming] = useState<"issue" | "void" | "delete" | null>(null);
@@ -127,22 +133,22 @@ export function InvoiceDetailClient({
               {t("action.print")}
             </Button>
             <DownloadPdfButton kind="invoices" id={invoice.id} />
-            {isDraft && (
+            {isDraft && canDraft && (
               <Button variant="danger" onClick={() => setConfirming("delete")}>
                 {t("action.delete")}
               </Button>
             )}
-            {isDraft && (
+            {isDraft && canDraft && (
               <Button variant="primary" onClick={() => setConfirming("issue")}>
                 {t("action.issue")}
               </Button>
             )}
-            {!isDraft && !isVoid && !settled && (
+            {!isDraft && !isVoid && !settled && canPay && (
               <Button variant="primary" onClick={() => setPaying(true)}>
                 {t("action.recordPayment")}
               </Button>
             )}
-            {!isDraft && !isVoid && (
+            {!isDraft && !isVoid && canVoid && (
               <Button variant="danger" onClick={() => setConfirming("void")}>
                 {t("action.void")}
               </Button>
@@ -214,7 +220,7 @@ export function InvoiceDetailClient({
                   title={t("label.lines")}
                   meta={t("msg.rowsCount", { n: invoice.lines.length })}
                   action={
-                    isDraft ? (
+                    isDraft && canDraft ? (
                       <Link
                         href={`/invoices/${invoice.id}/edit`}
                         className="text-2xs text-accent hover:underline"

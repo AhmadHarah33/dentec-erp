@@ -300,6 +300,15 @@ export async function mutate<T>(fn: (db: Database) => T | Promise<T>): Promise<T
   return result;
 }
 
+/**
+ * The raw connection, for the auth module's credentials, sessions and
+ * one-time tokens — tables that are deliberately not part of the cached
+ * Database (see migration 0002). Nothing else should need this.
+ */
+export function database(): Sql {
+  return sql();
+}
+
 /** Where the data lives, for the settings page. Never includes the password. */
 export function databaseLabel(): string {
   const url = process.env.DATABASE_URL;

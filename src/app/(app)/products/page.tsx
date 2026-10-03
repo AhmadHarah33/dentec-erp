@@ -2,8 +2,10 @@ import { snapshot } from "@/lib/data/repository";
 import { getI18n } from "@/lib/i18n/server";
 import { buildStockIndex, onHand } from "@/lib/stock";
 import { ItemsClient } from "@/components/app/items-client";
+import { requireAccess } from "@/lib/auth/server";
 
 export default async function ProductsPage() {
+  await requireAccess("catalog", "view");
   const { locale, t } = await getI18n();
   const db = await snapshot();
   const index = buildStockIndex(db.stockMoves);

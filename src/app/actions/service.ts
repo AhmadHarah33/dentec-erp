@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { remove, snapshot, transaction, update } from "@/lib/data/repository";
 import type { ServiceJob, ServiceStatus } from "@/lib/data/types";
 import { buildStockIndex, onHand } from "@/lib/stock";
+import { guard } from "@/lib/auth/server";
 import { fail, ok, STOCK_PATHS, type Result } from "./shared";
 
 type JobInput = Omit<ServiceJob, "id" | "createdAt" | "updatedAt" | "number" | "closedAt">;
@@ -25,6 +26,8 @@ function nextNumber(existing: string[], prefix: string): string {
 }
 
 export async function saveJob(id: string | null, input: JobInput): Promise<Result<string>> {
+  const gate = await guard("service", "edit");
+  if (!gate.ok) return gate;
   if (!input.customerId) return fail("msg.requiredField");
   if (!input.reportedFault.trim()) return fail("msg.requiredField");
 
@@ -70,6 +73,8 @@ export async function saveJob(id: string | null, input: JobInput): Promise<Resul
  * are moved, so pressing the button twice cannot double-deduct.
  */
 export async function consumeParts(id: string): Promise<Result<number>> {
+  const gate = await guard("service", "edit");
+  if (!gate.ok) return gate;
   const db = await snapshot();
   const job = db.serviceJobs.find((j) => j.id === id);
   if (!job) return fail("msg.error", "not-found");
@@ -122,6 +127,8 @@ export async function consumeParts(id: string): Promise<Result<number>> {
 }
 
 export async function setJobStatus(id: string, status: ServiceStatus): Promise<Result> {
+  const gate = await guard("service", "edit");
+  if (!gate.ok) return gate;
   const patch: Partial<ServiceJob> = { status };
   if (status === "delivered") patch.closedAt = new Date().toISOString();
   else patch.closedAt = null;
@@ -131,6 +138,8 @@ export async function setJobStatus(id: string, status: ServiceStatus): Promise<R
 }
 
 export async function deleteJob(id: string): Promise<Result> {
+  const gate = await guard("service", "edit");
+  if (!gate.ok) return gate;
   const db = await snapshot();
   const job = db.serviceJobs.find((j) => j.id === id);
   if (!job) return fail("msg.error", "not-found");

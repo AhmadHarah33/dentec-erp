@@ -22,6 +22,7 @@ import { Modal } from "@/components/ui/modal";
 import { ServiceBoard } from "@/components/app/service-board";
 import { DateInput } from "@/components/ui/date-input";
 import { useToast } from "@/components/ui/toast";
+import { useCan } from "@/components/app/member-context";
 
 /**
  * The workshop, shaped like the workshop.
@@ -48,6 +49,7 @@ export function ServiceClient({
   locale: string;
 }) {
   const t = useT();
+  const canEdit = useCan("service", "edit");
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [query, setQuery] = useState("");
@@ -143,7 +145,8 @@ export function ServiceClient({
         title={t("page.service.title")}
         subtitle={t("service.dragHint")}
         actions={
-          <Button
+          canEdit && (
+<Button
             variant="primary"
             onClick={() => {
               setError(null);
@@ -153,6 +156,7 @@ export function ServiceClient({
             <IconPlus />
             {t("page.service.new")}
           </Button>
+)
         }
       />
 
@@ -234,6 +238,7 @@ export function ServiceClient({
         users={users}
         shortages={shortages}
         showDelivered={showDelivered}
+        readOnly={!canEdit}
       />
 
       {/* New Job Modal -------------------------------------------- */}

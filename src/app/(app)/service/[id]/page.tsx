@@ -4,12 +4,14 @@ import { getI18n } from "@/lib/i18n/server";
 import { buildStockIndex, onHand } from "@/lib/stock";
 import { jobShortages } from "@/lib/service";
 import { JobClient } from "./job-client";
+import { requireAccess } from "@/lib/auth/server";
 
 export default async function JobPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireAccess("service", "view");
   const { id } = await params;
   const { locale } = await getI18n();
   const db = await snapshot();

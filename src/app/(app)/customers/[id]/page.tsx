@@ -16,12 +16,15 @@ import { PageHeader, StatTile, DetailRow, EmptyState } from "@/components/ui/pag
 import { Badge, Card, CardHeader, Num, LinkButton } from "@/components/ui/primitives";
 import { IconCoins, IconChart, IconCheck, IconDocument } from "@/components/ui/icons";
 import type { MessageKey } from "@/lib/i18n";
+import { requireAccess } from "@/lib/auth/server";
+import { can } from "@/lib/permissions";
 
 export default async function CustomerPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const member = await requireAccess("customers", "view");
   const { id } = await params;
   const { locale, t } = await getI18n();
   const db = await snapshot();
@@ -55,9 +58,11 @@ export default async function CustomerPage({
         actions={
           <>
             <LinkButton href="/customers">{t("action.back")}</LinkButton>
-            <LinkButton href={`/invoices/new?customer=${customer.id}`} variant="primary">
-              {t("page.invoices.new")}
-            </LinkButton>
+            {can(member.role, "invoices", "limited") && (
+              <LinkButton href={`/invoices/new?customer=${customer.id}`} variant="primary">
+                {t("page.invoices.new")}
+              </LinkButton>
+            )}
           </>
         }
       />

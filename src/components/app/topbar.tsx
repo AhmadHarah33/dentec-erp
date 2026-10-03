@@ -3,7 +3,7 @@
 import { Logo, MobileNav } from "./sidebar";
 import { GlobalSearch } from "./global-search";
 import { QuickCreate } from "./quick-create";
-import { RoleSwitcher } from "./role-switcher";
+import { UserMenu } from "./user-menu";
 import { LocaleToggle } from "./locale-toggle";
 import type { SearchEntry } from "@/lib/search";
 
@@ -18,15 +18,15 @@ export function Topbar({ search }: { search: SearchEntry[] }) {
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
-        {/* Both of these repeat at the foot of the mobile navigation drawer,
-            where there is room for them; the bar itself keeps only what fits
-            beside the search field on a phone. */}
-        <div className="hidden sm:block">
-          <RoleSwitcher />
-        </div>
+        {/* The locale and the user menu repeat at the foot of the mobile
+            navigation drawer, where there is room for them; the bar itself
+            keeps only what fits beside the search field on a phone. */}
         <QuickCreate />
         <div className="hidden lg:block">
           <LocaleToggle />
+        </div>
+        <div className="hidden sm:block">
+          <UserMenu />
         </div>
       </div>
     </header>

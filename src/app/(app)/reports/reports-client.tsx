@@ -31,6 +31,8 @@ interface ReportsClientProps {
   lastMoveDate: Record<string, string>;
   currency: CurrencyCode;
   locale: Locale;
+  /** False for roles that see sales figures only: no cost, margin or stock value. */
+  full: boolean;
 }
 
 type QuickRange = "thisMonth" | "last3Months" | "thisYear" | "allTime";
@@ -43,6 +45,7 @@ export function ReportsClient({
   lastMoveDate,
   currency,
   locale,
+  full,
 }: ReportsClientProps) {
   const t = useT();
   const money = (n: number) => formatMoney(n, currency, locale);
@@ -173,14 +176,16 @@ export function ReportsClient({
           icon={IconCoins}
           tone="success"
         />
+        {full && (
         <StatTile
-          label={t("report.grossProfit")}
-          value={formatMoneyCompact(salesData.totalProfit, currency, locale)}
-          icon={IconChart}
-          meta={`${fmt(salesData.grossMargin, 1)}%`}
-          tone={salesData.totalProfit > 0 ? "success" : "danger"}
-          chip={salesData.totalProfit > 0 ? t("dash.tileGood") : t("dash.tileBad")}
-        />
+            label={t("report.grossProfit")}
+            value={formatMoneyCompact(salesData.totalProfit, currency, locale)}
+            icon={IconChart}
+            meta={`${fmt(salesData.grossMargin, 1)}%`}
+            tone={salesData.totalProfit > 0 ? "success" : "danger"}
+            chip={salesData.totalProfit > 0 ? t("dash.tileGood") : t("dash.tileBad")}
+          />
+        )}
         <StatTile
           label={t("page.invoices.title")}
           value={fmt(salesData.invoiceCount, 0)}
@@ -252,7 +257,7 @@ export function ReportsClient({
           {salesData.items.length === 0 ? (
             <EmptyState compact title={t("empty.invoices")} />
           ) : (
-            <table className="w-full text-xs">
+            <table className={`w-full text-xs ${full ? "" : "[&_.cost-col]:hidden"}`}>
               <thead className="hairline-b bg-sunken/60 text-2xs text-muted h-10">
                 <tr>
                   <th className="px-3 text-start font-medium">
@@ -267,13 +272,13 @@ export function ReportsClient({
                   <th className="px-3 text-end font-medium w-24">
                     {t("report.revenue")}
                   </th>
-                  <th className="px-3 text-end font-medium w-20">
+                  <th className="cost-col px-3 text-end font-medium w-20">
                     {t("label.cost")}
                   </th>
-                  <th className="px-3 text-end font-medium w-20">
+                  <th className="cost-col px-3 text-end font-medium w-20">
                     {t("report.grossProfit")}
                   </th>
-                  <th className="px-3 text-end font-medium w-16">
+                  <th className="cost-col px-3 text-end font-medium w-16">
                     {t("label.margin")}
                   </th>
                 </tr>
@@ -301,11 +306,11 @@ export function ReportsClient({
                       <td className="px-3 text-end">
                         <Num>{money(row.revenue)}</Num>
                       </td>
-                      <td className="px-3 text-end">
+                      <td className="cost-col px-3 text-end">
                         <Num>{money(row.cost)}</Num>
                       </td>
                       <td
-                        className={`px-3 text-end ${
+                        className={`cost-col px-3 text-end ${
                           row.profit > 0
                             ? "text-accent"
                             : row.profit < 0
@@ -315,7 +320,7 @@ export function ReportsClient({
                       >
                         <Num>{money(row.profit)}</Num>
                       </td>
-                      <td className="px-3 text-end">
+                      <td className="cost-col px-3 text-end">
                         <Num>{fmt(margin, 1)}%</Num>
                       </td>
                     </tr>
@@ -345,21 +350,21 @@ export function ReportsClient({
                       )}
                     </Num>
                   </td>
-                  <td className="px-3 text-end font-semibold">
+                  <td className="cost-col px-3 text-end font-semibold">
                     <Num>
                       {money(
                         salesData.items.slice(0, 15).reduce((s, r) => s + r.cost, 0),
                       )}
                     </Num>
                   </td>
-                  <td className="px-3 text-end font-semibold">
+                  <td className="cost-col px-3 text-end font-semibold">
                     <Num>
                       {money(
                         salesData.items.slice(0, 15).reduce((s, r) => s + r.profit, 0),
                       )}
                     </Num>
                   </td>
-                  <td />
+                  <td className="cost-col" />
                 </tr>
               </tfoot>
             </table>
@@ -434,7 +439,8 @@ export function ReportsClient({
       </Card>
 
       {/* 4. Stock Valuation */}
-      <Card>
+      {full && (
+<Card>
         <CardHeader title={t("report.stockValuation")} />
         <div className="overflow-x-auto">
           {stockValuation.length === 0 ? (
@@ -507,6 +513,7 @@ export function ReportsClient({
           )}
         </div>
       </Card>
+)}
 
       {/* 5. Slow Movers */}
       <Card>

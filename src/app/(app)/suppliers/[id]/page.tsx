@@ -14,12 +14,14 @@ import { PageHeader, StatTile, DetailRow, EmptyState } from "@/components/ui/pag
 import { Badge, Card, CardHeader, Num, LinkButton } from "@/components/ui/primitives";
 import { IconCart, IconChart, IconCheck, IconCoins } from "@/components/ui/icons";
 import type { MessageKey } from "@/lib/i18n";
+import { requireAccess } from "@/lib/auth/server";
 
 export default async function SupplierPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireAccess("purchasing", "view");
   const { id } = await params;
   const { locale, t } = await getI18n();
   const db = await snapshot();

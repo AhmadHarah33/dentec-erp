@@ -15,6 +15,7 @@ import { Badge, Card, CardHeader, Num, LinkButton, Button } from "@/components/u
 import { Confirm } from "@/components/ui/modal";
 import { DownloadPdfButton } from "@/components/app/download-pdf";
 import { useToast } from "@/components/ui/toast";
+import { useCan } from "@/components/app/member-context";
 
 export function PurchaseDetailClient({
   order,
@@ -35,6 +36,7 @@ export function PurchaseDetailClient({
   locale: string;
 }) {
   const t = useT();
+  const canEdit = useCan("purchasing", "edit");
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [receiveOpen, setReceiveOpen] = useState(false);
@@ -53,10 +55,10 @@ export function PurchaseDetailClient({
     [order],
   );
 
-  const canReceive = order.status === "draft" || order.status === "ordered";
-  const canCancel = order.status !== "received" && order.status !== "cancelled";
+  const canReceive = canEdit && (order.status === "draft" || order.status === "ordered");
+  const canCancel = canEdit && order.status !== "received" && order.status !== "cancelled";
 
-  const canDelete = order.status === "draft";
+  const canDelete = canEdit && order.status === "draft";
 
   // Every outcome closes the dialog; a failure is shown under the header
   // rather than swallowed, which is what this page used to do.

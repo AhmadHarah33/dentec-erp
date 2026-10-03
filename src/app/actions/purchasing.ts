@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { remove, snapshot, transaction, update } from "@/lib/data/repository";
 import type { PurchaseOrder } from "@/lib/data/types";
+import { guard } from "@/lib/auth/server";
 import { fail, ok, STOCK_PATHS, type Result } from "./shared";
 
 type OrderInput = Omit<PurchaseOrder, "id" | "createdAt" | "updatedAt" | "number" | "receivedAt">;
@@ -26,6 +27,8 @@ function nextNumber(existing: string[], prefix: string): string {
 }
 
 export async function saveOrder(id: string | null, input: OrderInput): Promise<Result<string>> {
+  const gate = await guard("purchasing", "edit");
+  if (!gate.ok) return gate;
   if (!input.supplierId) return fail("msg.requiredField");
   if (input.lines.length === 0) return fail("empty.lines");
   if (input.lines.some((l) => l.qty <= 0)) return fail("msg.requiredField");
@@ -69,6 +72,8 @@ export async function saveOrder(id: string | null, input: OrderInput): Promise<R
  * landed-cost report possible later.
  */
 export async function receiveOrder(id: string, date: string): Promise<Result> {
+  const gate = await guard("purchasing", "edit");
+  if (!gate.ok) return gate;
   const db = await snapshot();
   const order = db.purchaseOrders.find((o) => o.id === id);
   if (!order) return fail("msg.error", "not-found");
@@ -108,6 +113,8 @@ export async function receiveOrder(id: string, date: string): Promise<Result> {
 }
 
 export async function cancelOrder(id: string): Promise<Result> {
+  const gate = await guard("purchasing", "edit");
+  if (!gate.ok) return gate;
   const db = await snapshot();
   const order = db.purchaseOrders.find((o) => o.id === id);
   if (!order) return fail("msg.error", "not-found");
@@ -118,6 +125,8 @@ export async function cancelOrder(id: string): Promise<Result> {
 }
 
 export async function deleteOrder(id: string): Promise<Result> {
+  const gate = await guard("purchasing", "edit");
+  if (!gate.ok) return gate;
   const db = await snapshot();
   const order = db.purchaseOrders.find((o) => o.id === id);
   if (!order) return fail("msg.error", "not-found");

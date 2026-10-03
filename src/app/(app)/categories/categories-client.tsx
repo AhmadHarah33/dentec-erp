@@ -12,6 +12,7 @@ import { Modal, Confirm } from "@/components/ui/modal";
 import { IconEdit, IconPlus, IconTrash } from "@/components/ui/icons";
 import type { MessageKey } from "@/lib/i18n";
 import { useToast } from "@/components/ui/toast";
+import { useCan } from "@/components/app/member-context";
 
 const SCOPES: CategoryScope[] = ["product", "spare_part", "both"];
 
@@ -38,6 +39,8 @@ export function CategoriesClient({
   locale: string;
 }) {
   const t = useT();
+  // Courtesy only: the server action refuses on its own.
+  const canEdit = useCan("catalog", "edit");
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [editing, setEditing] = useState<Category | null>(null);
@@ -129,10 +132,12 @@ export function CategoriesClient({
         title={t("page.categories.title")}
         subtitle={t("page.categories.subtitle")}
         actions={
-          <Button variant="primary" onClick={openNew}>
-            <IconPlus />
-            {t("page.categories.new")}
-          </Button>
+          canEdit && (
+            <Button variant="primary" onClick={openNew}>
+              <IconPlus />
+              {t("page.categories.new")}
+            </Button>
+          )
         }
       />
 
@@ -141,9 +146,11 @@ export function CategoriesClient({
           <EmptyState
             title={t("empty.categories")}
             action={
-              <Button variant="primary" onClick={openNew}>
-                {t("page.categories.new")}
-              </Button>
+              canEdit && (
+                <Button variant="primary" onClick={openNew}>
+                  {t("page.categories.new")}
+                </Button>
+              )
             }
           />
         ) : (
@@ -188,7 +195,8 @@ export function CategoriesClient({
                     <Num>{formatNumber(counts[category.id] ?? 0, locale, 0)}</Num>
                   </td>
                   <td className="h-11 px-3">
-                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                    {canEdit && (
+<div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                       <Button
                         size="sm"
                         variant="ghost"
@@ -210,6 +218,7 @@ export function CategoriesClient({
                         <IconTrash />
                       </Button>
                     </div>
+)}
                   </td>
                 </tr>
               ))}

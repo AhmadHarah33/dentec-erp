@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { create, remove, update } from "@/lib/data/repository";
 import type { Expense, Payment } from "@/lib/data/types";
 import { round2 } from "@/lib/money";
+import { guard } from "@/lib/auth/server";
 import { fail, ok, type Result } from "./shared";
-import { syncStatus } from "./sales";
+import { syncStatus } from "@/lib/invoice-status";
 
 type PaymentInput = Omit<Payment, "id" | "createdAt" | "updatedAt">;
 type ExpenseInput = Omit<Expense, "id" | "createdAt" | "updatedAt">;
@@ -20,6 +21,8 @@ export async function savePayment(
   id: string | null,
   input: PaymentInput,
 ): Promise<Result<string>> {
+  const gate = await guard("finance", "edit");
+  if (!gate.ok) return gate;
   if (!input.partyId) return fail("msg.requiredField");
   if (input.amount <= 0) return fail("msg.requiredField");
 
@@ -33,6 +36,8 @@ export async function savePayment(
 }
 
 export async function deletePayment(id: string, invoiceId: string | null): Promise<Result> {
+  const gate = await guard("finance", "edit");
+  if (!gate.ok) return gate;
   await remove("payments", id);
   if (invoiceId) await syncStatus(invoiceId);
   refresh();
@@ -43,6 +48,8 @@ export async function saveExpense(
   id: string | null,
   input: ExpenseInput,
 ): Promise<Result<string>> {
+  const gate = await guard("finance", "edit");
+  if (!gate.ok) return gate;
   if (input.amount <= 0) return fail("msg.requiredField");
   if (!input.description.trim()) return fail("msg.requiredField");
 
@@ -53,6 +60,8 @@ export async function saveExpense(
 }
 
 export async function deleteExpense(id: string): Promise<Result> {
+  const gate = await guard("finance", "edit");
+  if (!gate.ok) return gate;
   await remove("expenses", id);
   refresh();
   return ok(undefined);

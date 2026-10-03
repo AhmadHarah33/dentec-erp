@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { create, remove, snapshot, transaction } from "@/lib/data/repository";
 import type { Warehouse } from "@/lib/data/types";
 import { buildStockIndex, onHand } from "@/lib/stock";
+import { guard } from "@/lib/auth/server";
 import { fail, ok, STOCK_PATHS, type Result } from "./shared";
 
 type WarehouseInput = Omit<Warehouse, "id" | "createdAt" | "updatedAt">;
@@ -20,6 +21,8 @@ export async function saveWarehouse(
   id: string | null,
   input: WarehouseInput,
 ): Promise<Result<string>> {
+  const gate = await guard("settings", "edit");
+  if (!gate.ok) return gate;
   if (!input.nameAr.trim()) return fail("msg.requiredField");
 
   const rowId = await transaction((db, h) => {
@@ -46,6 +49,8 @@ export async function saveWarehouse(
 }
 
 export async function deleteWarehouse(id: string): Promise<Result> {
+  const gate = await guard("settings", "edit");
+  if (!gate.ok) return gate;
   const db = await snapshot();
   if (db.stockMoves.some((m) => m.warehouseId === id)) {
     return fail("msg.error", "warehouse-has-moves");
@@ -81,6 +86,8 @@ export async function adjustStock(input: {
   date: string;
   note: string;
 }): Promise<Result> {
+  const gate = await guard("inventory", "edit");
+  if (!gate.ok) return gate;
   if (!input.itemId || !input.warehouseId) return fail("msg.requiredField");
   if (!input.qtyDelta) return fail("msg.requiredField");
 
@@ -116,6 +123,8 @@ export async function transferStock(input: {
   date: string;
   note: string;
 }): Promise<Result> {
+  const gate = await guard("inventory", "edit");
+  if (!gate.ok) return gate;
   if (input.fromWarehouseId === input.toWarehouseId) return fail("msg.error", "same-warehouse");
   if (input.qty <= 0) return fail("msg.requiredField");
 

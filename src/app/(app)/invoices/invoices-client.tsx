@@ -13,6 +13,7 @@ import { Drawer, DrawerSection } from "@/components/ui/drawer";
 import { DetailRow } from "@/components/ui/page";
 import { IconAlert, IconCoins, IconDocument, IconPlus } from "@/components/ui/icons";
 import { DateInput } from "@/components/ui/date-input";
+import { useCan } from "@/components/app/member-context";
 
 export interface InvoiceRow {
   invoice: SalesInvoice;
@@ -31,6 +32,7 @@ export function InvoicesClient({
   locale: string;
 }) {
   const t = useT();
+  const canCreate = useCan("invoices", "limited");
   const [open, setOpen] = useState<InvoiceRow | null>(null);
   const [status, setStatus] = useState("");
   const [from, setFrom] = useState("");
@@ -164,10 +166,12 @@ export function InvoicesClient({
         title={t("page.invoices.title")}
         subtitle={t("page.invoices.subtitle")}
         actions={
-          <LinkButton href="/invoices/new" variant="primary">
-            <IconPlus />
-            {t("page.invoices.new")}
-          </LinkButton>
+          canCreate && (
+            <LinkButton href="/invoices/new" variant="primary">
+              <IconPlus />
+              {t("page.invoices.new")}
+            </LinkButton>
+          )
         }
       />
 
@@ -207,9 +211,11 @@ export function InvoicesClient({
         pageSize={30}
         emptyTitle={t("empty.invoices")}
         emptyAction={
-          <LinkButton href="/invoices/new" variant="primary">
-            {t("page.invoices.new")}
-          </LinkButton>
+          canCreate && (
+            <LinkButton href="/invoices/new" variant="primary">
+              {t("page.invoices.new")}
+            </LinkButton>
+          )
         }
         filters={
           <>

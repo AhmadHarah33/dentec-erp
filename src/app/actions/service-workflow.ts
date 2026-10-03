@@ -13,6 +13,7 @@ import { buildStockIndex } from "@/lib/stock";
 import { jobShortages, partPrice } from "@/lib/service";
 import { addDays, today } from "@/lib/dates";
 import { round2 } from "@/lib/money";
+import { guard } from "@/lib/auth/server";
 import { fail, ok, STOCK_PATHS, type Result } from "./shared";
 
 /** Next number in a series, computed at write time so gaps are not created. */
@@ -55,6 +56,8 @@ function refreshAll(jobId: string) {
  * numbers are yours to correct before it goes to the customer.
  */
 export async function invoiceJob(jobId: string): Promise<Result<string>> {
+  const gate = await guard("invoices", "limited");
+  if (!gate.ok) return gate;
   const db = await snapshot();
   const job = db.serviceJobs.find((j) => j.id === jobId);
   if (!job) return fail("msg.error", "not-found");
@@ -163,6 +166,8 @@ function lastSupplierFor(itemId: ID, orders: PurchaseOrder[]): ID | null {
  * Returns the ids created — one is the common case and the caller opens it.
  */
 export async function orderShortage(jobId: string): Promise<Result<string[]>> {
+  const gate = await guard("purchasing", "edit");
+  if (!gate.ok) return gate;
   const db = await snapshot();
   const job = db.serviceJobs.find((j) => j.id === jobId);
   if (!job) return fail("msg.error", "not-found");

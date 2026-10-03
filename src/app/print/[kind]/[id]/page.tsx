@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getI18n } from "@/lib/i18n/server";
 import { DocumentSheet } from "@/components/print/document-sheet";
 import { isDocumentKind, loadDocument } from "@/lib/pdf/document";
+import { requireAccess } from "@/lib/auth/server";
 
 /**
  * The bare document, on its own route outside `(app)` so it inherits no
@@ -18,6 +19,8 @@ export default async function PrintPage({
 }) {
   const { kind, id } = await params;
   if (!isDocumentKind(kind)) notFound();
+  // Outside (app), so it gets no layout guard — it checks for itself.
+  await requireAccess(kind === "invoice" ? "invoices" : "purchasing", "view");
 
   const { locale } = await getI18n();
   const doc = await loadDocument(kind, id, locale);

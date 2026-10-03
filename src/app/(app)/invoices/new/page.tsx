@@ -3,12 +3,14 @@ import { getI18n } from "@/lib/i18n/server";
 import { buildStockIndex, onHand } from "@/lib/stock";
 import { DocumentEditor } from "@/components/app/document-editor";
 import { blankDoc } from "@/lib/doc-defaults";
+import { requireAccess } from "@/lib/auth/server";
 
 export default async function NewInvoicePage({
   searchParams,
 }: {
   searchParams: Promise<{ customer?: string }>;
 }) {
+  await requireAccess("invoices", "limited");
   const { customer } = await searchParams;
   const { locale } = await getI18n();
   const db = await snapshot();

@@ -1,6 +1,7 @@
 import { snapshot } from "@/lib/data/repository";
 import { getI18n } from "@/lib/i18n/server";
-import { getViewRole } from "@/lib/roles.server";
+import { requireMember } from "@/lib/auth/server";
+import { can, dashboardFocus, type Area, type Level } from "@/lib/permissions";
 import { buildStockIndex, lowStock, stockValue } from "@/lib/stock";
 import {
   invoiceOutstanding,
@@ -58,19 +59,22 @@ import { countedPhrase, type CountedNoun } from "@/lib/plural";
  *
  * The view role reorders this and nothing else. Accounting leads with money
  * and drops the workshop; service leads with the workshop and drops revenue
- * figures it has no use for. No page is hidden either way: the role is a
- * preference, not a permission.
+ * figures it has no use for. The focus follows the signed-in person's role
+ * (`dashboardFocus`); what each role may open is enforced by the pages and
+ * actions themselves, and the buttons here only offer what the role can do.
  */
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; denied?: string }>;
 }) {
   const { locale, t } = await getI18n();
-  const role = await getViewRole();
+  const member = await requireMember();
+  const role = dashboardFocus(member.role);
+  const allowed = (area: Area, level: Level) => can(member.role, area, level);
   const db = await snapshot();
   const { baseCurrency } = db.settings;
-  const { period } = await searchParams;
+  const { period, denied } = await searchParams;
   const trendMonths = period === "6" ? 6 : 12;
 
   const money = (n: number) => formatMoney(n, baseCurrency, locale);
@@ -138,7 +142,7 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
 
   /* ---- What this role leads with ---------------------------------- */
 
-  const showMoney = role !== "service";
+  const showMoney = role !== "service" && (allowed("finance", "view") || allowed("invoices", "view"));
 
   const overdueTile = (
     <KpiTile
@@ -366,11 +370,13 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
         subtitle={formatDateLong(now, locale)}
         actions={
           <>
-            {role === "service" ? (
-              <LinkButton href="/service" variant="primary">
-                <IconPlus />
-                {t("dash.newJob")}
-              </LinkButton>
+            {role === "service" || !allowed("invoices", "limited") ? (
+              allowed("service", "edit") && (
+                <LinkButton href="/service" variant="primary">
+                  <IconPlus />
+                  {t("dash.newJob")}
+                </LinkButton>
+              )
             ) : (
               <LinkButton href="/invoices/new" variant="primary">
                 <IconPlus />
@@ -380,19 +386,27 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
             {/* cn() is a plain join, so a `hidden` utility on LinkButton would
                 lose to the `inline-flex` in its base class. Wrap instead. */}
             <span className="hidden sm:flex items-center gap-2">
-              {role === "accounting" && (
+              {role === "accounting" && allowed("finance", "edit") && (
                 <LinkButton href="/accounting">{t("page.accounting.newPayment")}</LinkButton>
               )}
-              {role !== "accounting" && (
+              {role !== "accounting" && allowed("purchasing", "edit") && (
                 <LinkButton href="/purchases/new">{t("dash.newPurchase")}</LinkButton>
               )}
-              {role === "owner" && <LinkButton href="/service">{t("dash.newJob")}</LinkButton>}
+              {role === "owner" && allowed("service", "edit") && (
+                <LinkButton href="/service">{t("dash.newJob")}</LinkButton>
+              )}
             </span>
           </>
         }
       />
 
-      <SetupChecklist db={db} t={t} />
+      {denied && (
+        <p role="status" className="text-xs text-warn bg-warn-soft border border-warn-line rounded-sm px-4 py-3 mb-6">
+          {t("auth.denied")}
+        </p>
+      )}
+
+      {member.role === "owner" && <SetupChecklist db={db} t={t} />}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">{tiles}</div>
 

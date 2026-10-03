@@ -77,6 +77,7 @@ export function ServiceBoard({
   users,
   shortages,
   showDelivered,
+  readOnly = false,
 }: {
   jobs: ServiceJob[];
   customers: Customer[];
@@ -84,6 +85,8 @@ export function ServiceBoard({
   /** Job id → how many distinct parts it is short. */
   shortages: Record<string, number>;
   showDelivered: boolean;
+  /** For roles that may look but not move: no drag, no move menu. */
+  readOnly?: boolean;
 }) {
   const { t, locale } = useLocale();
   const [, startTransition] = useTransition();
@@ -134,6 +137,7 @@ export function ServiceBoard({
   }
 
   function handlePointerDown(e: React.PointerEvent, job: ServiceJob) {
+    if (readOnly) return;
     // Touch keeps the explicit move menu as its only path — a column row
     // scrolls horizontally on a phone, and a card that also claims touch
     // gestures would fight that scroll.
@@ -377,6 +381,7 @@ export function ServiceBoard({
                       }}
                       onPointerDown={(e) => handlePointerDown(e, job)}
                       onMove={move}
+                      readOnly={readOnly}
                     />
                   ))
                 )}
@@ -408,6 +413,7 @@ function JobCard({
   cardRef,
   onPointerDown,
   onMove,
+  readOnly,
 }: {
   job: ServiceJob;
   customers: Customer[];
@@ -417,6 +423,7 @@ function JobCard({
   cardRef: (el: HTMLDivElement | null) => void;
   onPointerDown: (e: React.PointerEvent) => void;
   onMove: (id: string, status: ServiceStatus) => void;
+  readOnly: boolean;
 }) {
   const { t, locale } = useLocale();
   const [menu, setMenu] = useState(false);
@@ -434,7 +441,10 @@ function JobCard({
         "select-none touch-pan-y",
         dragging
           ? "shadow-pop cursor-grabbing"
-          : "shadow-card hover:shadow-pop transition-shadow duration-[var(--dur-swift)] lg:cursor-grab",
+          : cn(
+              "shadow-card hover:shadow-pop transition-shadow duration-[var(--dur-swift)]",
+              !readOnly && "lg:cursor-grab",
+            ),
       )}
     >
       <div className="flex items-start gap-2">
@@ -446,7 +456,8 @@ function JobCard({
           <div className="text-2xs text-muted truncate">{customer}</div>
         </Link>
         {/* Touch has no drag, so every card also carries an explicit move menu. */}
-        <button
+        {!readOnly && (
+<button
           type="button"
           onClick={() => setMenu((m) => !m)}
           aria-haspopup="menu"
@@ -456,6 +467,7 @@ function JobCard({
         >
           <IconChevronDown size={14} />
         </button>
+)}
       </div>
 
       <div className="flex items-center justify-between gap-x-3 gap-y-0.5 flex-wrap text-2xs text-faint">

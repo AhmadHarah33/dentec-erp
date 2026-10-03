@@ -2,8 +2,10 @@ import { snapshot } from "@/lib/data/repository";
 import { getI18n } from "@/lib/i18n/server";
 import { buildStockIndex, onHand } from "@/lib/stock";
 import { InventoryClient, type InventoryRow } from "./inventory-client";
+import { requireAccess } from "@/lib/auth/server";
 
 export default async function InventoryPage() {
+  await requireAccess("inventory", "view");
   const { locale } = await getI18n();
   const db = await snapshot();
   const index = buildStockIndex(db.stockMoves);

@@ -14,6 +14,7 @@ import { DataTable, type Column } from "@/components/ui/table";
 import { Drawer, DrawerSection } from "@/components/ui/drawer";
 import { DetailRow } from "@/components/ui/page";
 import { DateInput } from "@/components/ui/date-input";
+import { useCan } from "@/components/app/member-context";
 
 export function PurchasesClient({
   orders,
@@ -29,6 +30,7 @@ export function PurchasesClient({
   locale: string;
 }) {
   const t = useT();
+  const canEdit = useCan("purchasing", "edit");
   const [viewing, setViewing] = useState<PurchaseOrder | null>(null);
   const [status, setStatus] = useState("");
   const [from, setFrom] = useState("");
@@ -122,9 +124,11 @@ export function PurchasesClient({
         title={t("page.purchases.title")}
         subtitle={t("page.purchases.subtitle")}
         actions={
-          <LinkButton href="/purchases/new" variant="primary">
-            {t("page.purchases.new")}
-          </LinkButton>
+          canEdit && (
+            <LinkButton href="/purchases/new" variant="primary">
+              {t("page.purchases.new")}
+            </LinkButton>
+          )
         }
       />
 

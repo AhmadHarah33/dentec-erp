@@ -37,6 +37,7 @@ import { Drawer, DrawerSection } from "@/components/ui/drawer";
 import { DetailRow } from "@/components/ui/page";
 import { IconPlus } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/toast";
+import { useCan } from "@/components/app/member-context";
 
 export interface PartyRow {
   party: Party;
@@ -84,6 +85,8 @@ export function PartiesClient({
   const toast = useToast();
   // Only customers are billed, so only customers carry a billing regime.
   const isCustomer = which === "customers";
+  // Customers and suppliers sit in different areas of the permission table.
+  const canEdit = useCan(isCustomer ? "customers" : "purchasing", "edit");
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Party | null>(null);
@@ -252,10 +255,12 @@ export function PartiesClient({
         title={title}
         subtitle={subtitle}
         actions={
-          <Button variant="primary" onClick={openNew}>
-            <IconPlus />
-            {newLabel}
-          </Button>
+          canEdit && (
+            <Button variant="primary" onClick={openNew}>
+              <IconPlus />
+              {newLabel}
+            </Button>
+          )
         }
       />
 
@@ -283,9 +288,11 @@ export function PartiesClient({
         onRowClick={(r) => setViewing(r)}
         emptyTitle={which === "customers" ? t("empty.customers") : t("empty.suppliers")}
         emptyAction={
-          <Button variant="primary" onClick={openNew}>
-            {newLabel}
-          </Button>
+          canEdit && (
+            <Button variant="primary" onClick={openNew}>
+              {newLabel}
+            </Button>
+          )
         }
         filters={
           <label className="flex items-center gap-1.5 text-2xs text-muted cursor-pointer">
@@ -616,7 +623,8 @@ export function PartiesClient({
               >
                 {t("action.openFull")}
               </LinkButton>
-              <Button
+              {canEdit && (
+<Button
                 onClick={() => {
                   const party = viewing.party;
                   setViewing(null);
@@ -625,6 +633,7 @@ export function PartiesClient({
               >
                 {t("action.edit")}
               </Button>
+)}
             </>
           )
         }

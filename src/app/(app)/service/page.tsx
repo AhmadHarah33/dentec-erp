@@ -3,8 +3,10 @@ import { getI18n } from "@/lib/i18n/server";
 import { buildStockIndex } from "@/lib/stock";
 import { shortagesByJob } from "@/lib/service";
 import { ServiceClient } from "./service-client";
+import { requireAccess } from "@/lib/auth/server";
 
 export default async function ServicePage() {
+  await requireAccess("service", "view");
   const { locale } = await getI18n();
   const db = await snapshot();
   const index = buildStockIndex(db.stockMoves);

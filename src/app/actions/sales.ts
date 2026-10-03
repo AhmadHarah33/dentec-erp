@@ -14,6 +14,8 @@ import { buildStockIndex, onHand } from "@/lib/stock";
 import { computeTotals, round2, toBase } from "@/lib/money";
 import { paidForInvoice } from "@/lib/queries";
 import { fail, ok, STOCK_PATHS, type Result } from "./shared";
+import { syncStatus } from "@/lib/invoice-status";
+import { guard } from "@/lib/auth/server";
 
 type InvoiceInput = Omit<SalesInvoice, "id" | "createdAt" | "updatedAt" | "number" | "issuedAt">;
 
@@ -47,6 +49,8 @@ export async function saveInvoice(
   id: string | null,
   input: InvoiceInput,
 ): Promise<Result<string>> {
+  const gate = await guard("invoices", "limited");
+  if (!gate.ok) return gate;
   const valid = validate(input.lines);
   if (!valid.ok) return valid;
   if (!input.customerId) return fail("msg.requiredField");
@@ -106,6 +110,8 @@ export async function setInvoiceBilling(
     localRate?: number;
   },
 ): Promise<Result> {
+  const gate = await guard("invoices", "limited");
+  if (!gate.ok) return gate;
   const db = await snapshot();
   const invoice = db.salesInvoices.find((i) => i.id === id);
   if (!invoice) return fail("msg.error", "not-found");
@@ -137,6 +143,8 @@ export async function setInvoiceBilling(
 }
 
 export async function issueInvoice(id: string): Promise<Result> {
+  const gate = await guard("invoices", "limited");
+  if (!gate.ok) return gate;
   const db = await snapshot();
   const invoice = db.salesInvoices.find((i) => i.id === id);
   if (!invoice) return fail("msg.error", "not-found");
@@ -192,6 +200,8 @@ export async function issueInvoice(id: string): Promise<Result> {
  * cannot be rewritten.
  */
 export async function voidInvoice(id: string): Promise<Result> {
+  const gate = await guard("invoices", "edit");
+  if (!gate.ok) return gate;
   const db = await snapshot();
   const invoice = db.salesInvoices.find((i) => i.id === id);
   if (!invoice) return fail("msg.error", "not-found");
@@ -228,6 +238,8 @@ export async function voidInvoice(id: string): Promise<Result> {
 }
 
 export async function deleteInvoice(id: string): Promise<Result> {
+  const gate = await guard("invoices", "limited");
+  if (!gate.ok) return gate;
   const db = await snapshot();
   const invoice = db.salesInvoices.find((i) => i.id === id);
   if (!invoice) return fail("msg.error", "not-found");
@@ -235,22 +247,6 @@ export async function deleteInvoice(id: string): Promise<Result> {
   await remove("salesInvoices", id);
   refresh();
   return ok(undefined);
-}
-
-/** Recompute paid/partial/issued from the payments actually recorded. */
-export async function syncStatus(invoiceId: string): Promise<void> {
-  const db = await snapshot();
-  const invoice = db.salesInvoices.find((i) => i.id === invoiceId);
-  if (!invoice || invoice.status === "draft" || invoice.status === "void") return;
-
-  const totals = computeTotals(invoice.lines, invoice.discountKind, invoice.discountValue);
-  const total = toBase(totals.total, invoice.fxRate);
-  const paid = paidForInvoice(db.payments, invoiceId);
-
-  const status =
-    paid <= 0.005 ? "issued" : paid + 0.005 >= total ? "paid" : "partial";
-
-  if (status !== invoice.status) await update("salesInvoices", invoiceId, { status });
 }
 
 /** Record money received, then let the invoice status follow from it. */
@@ -262,6 +258,8 @@ export async function recordInvoicePayment(input: {
   reference: string;
   note: string;
 }): Promise<Result> {
+  const gate = await guard("finance", "edit");
+  if (!gate.ok) return gate;
   if (input.amount <= 0) return fail("msg.requiredField");
 
   const db = await snapshot();

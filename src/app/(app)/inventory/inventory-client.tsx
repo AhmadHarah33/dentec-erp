@@ -26,6 +26,7 @@ import { STOCK_TABS } from "@/lib/tabs";
 import { Modal } from "@/components/ui/modal";
 import { DateInput } from "@/components/ui/date-input";
 import { useToast } from "@/components/ui/toast";
+import { useCan } from "@/components/app/member-context";
 
 export interface InventoryRow {
   item: Item;
@@ -48,6 +49,8 @@ export function InventoryClient({
   locale: string;
 }) {
   const t = useT();
+  // Courtesy only: adjustStock/transferStock refuse on their own.
+  const canEdit = useCan("inventory", "edit");
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [onlyLow, setOnlyLow] = useState(false);
@@ -273,7 +276,7 @@ export function InventoryClient({
 
       <DataTable
         rows={filtered}
-        columns={columns}
+        columns={canEdit ? columns : columns.filter((c) => c.key !== "actions")}
         rowKey={(r) => r.item.id}
         pageSize={30}
         emptyTitle={t("empty.items")}

@@ -1,8 +1,10 @@
 import { snapshot } from "@/lib/data/repository";
 import { getI18n } from "@/lib/i18n/server";
 import { MovesClient } from "./moves-client";
+import { requireAccess } from "@/lib/auth/server";
 
 export default async function MovesPage() {
+  await requireAccess("inventory", "view");
   const { locale } = await getI18n();
   const db = await snapshot();
 

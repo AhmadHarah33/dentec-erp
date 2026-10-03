@@ -2,8 +2,10 @@ import { snapshot } from "@/lib/data/repository";
 import { getI18n } from "@/lib/i18n/server";
 import { supplierBalance } from "@/lib/queries";
 import { PartiesClient, type PartyRow } from "@/components/app/parties-client";
+import { requireAccess } from "@/lib/auth/server";
 
 export default async function SuppliersPage() {
+  await requireAccess("purchasing", "view");
   const { locale, t } = await getI18n();
   const db = await snapshot();
 

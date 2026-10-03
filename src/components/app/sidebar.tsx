@@ -7,7 +7,9 @@ import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
 import { NAV, isActive } from "@/lib/nav";
 import { useT } from "@/lib/i18n/context";
-import { RoleSwitcher } from "./role-switcher";
+import { UserMenu } from "./user-menu";
+import { useMember } from "./member-context";
+import { areaForPath, can } from "@/lib/permissions";
 import { LocaleToggle } from "./locale-toggle";
 
 /**
@@ -19,10 +21,21 @@ import { LocaleToggle } from "./locale-toggle";
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
   const t = useT();
   const pathname = usePathname();
+  const { role } = useMember();
+
+  // A destination this role cannot open is not shown at all; a group left
+  // with nothing in it goes too.
+  const groups = NAV.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => {
+      const area = areaForPath(item.href);
+      return !area || can(role, area, "view");
+    }),
+  })).filter((group) => group.items.length > 0);
 
   return (
     <nav className="flex flex-col gap-4 px-3 py-4">
-      {NAV.map((group) => (
+      {groups.map((group) => (
         <div key={group.titleKey}>
           <h3 className="px-3 mb-1 text-2xs font-semibold text-faint">{t(group.titleKey)}</h3>
           <ul className="space-y-px">
@@ -162,7 +175,7 @@ export function MobileNav() {
         </div>
         {/* The two preferences the top bar has no room for on a phone. */}
         <div className="hairline-t p-4 flex flex-col gap-3 shrink-0">
-          <RoleSwitcher variant="block" />
+          <UserMenu variant="block" />
           <LocaleToggle block />
         </div>
       </div>

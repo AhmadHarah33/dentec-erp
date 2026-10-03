@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { create, remove, snapshot, update } from "@/lib/data/repository";
 import type { Party } from "@/lib/data/types";
+import { guard } from "@/lib/auth/server";
 import { fail, ok, type Result } from "./shared";
 
 type PartyInput = Omit<Party, "id" | "createdAt" | "updatedAt">;
@@ -13,6 +14,9 @@ export async function saveParty(
   id: string | null,
   input: PartyInput,
 ): Promise<Result<string>> {
+  // Customers and suppliers sit in different areas of the permission table.
+  const gate = await guard(which === "customers" ? "customers" : "purchasing", "edit");
+  if (!gate.ok) return gate;
   if (!input.name.trim()) return fail("msg.requiredField");
 
   const db = await snapshot();
@@ -35,6 +39,9 @@ export async function deleteParty(
   which: Which,
   id: string,
 ): Promise<Result<"deleted" | "archived">> {
+  // Customers and suppliers sit in different areas of the permission table.
+  const gate = await guard(which === "customers" ? "customers" : "purchasing", "edit");
+  if (!gate.ok) return gate;
   const db = await snapshot();
   const referenced =
     db.payments.some((p) => p.partyId === id) ||

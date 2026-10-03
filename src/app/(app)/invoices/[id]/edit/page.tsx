@@ -3,12 +3,14 @@ import { snapshot } from "@/lib/data/repository";
 import { getI18n } from "@/lib/i18n/server";
 import { buildStockIndex, onHand } from "@/lib/stock";
 import { DocumentEditor } from "@/components/app/document-editor";
+import { requireAccess } from "@/lib/auth/server";
 
 export default async function EditInvoicePage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireAccess("invoices", "limited");
   const { id } = await params;
   const { locale } = await getI18n();
   const db = await snapshot();

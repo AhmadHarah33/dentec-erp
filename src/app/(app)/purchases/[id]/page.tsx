@@ -2,12 +2,14 @@ import { notFound } from "next/navigation";
 import { snapshot } from "@/lib/data/repository";
 import { getI18n } from "@/lib/i18n/server";
 import { PurchaseDetailClient } from "./purchase-detail-client";
+import { requireAccess } from "@/lib/auth/server";
 
 export default async function PurchaseDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireAccess("purchasing", "view");
   const { id } = await params;
   const { locale } = await getI18n();
   const db = await snapshot();
