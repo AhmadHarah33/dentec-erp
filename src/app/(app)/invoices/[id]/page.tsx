@@ -30,6 +30,7 @@ export default async function InvoicePage({
       name: item ? localName(item, locale) : line.description,
       sku: item?.sku ?? "",
       unit: item?.unit ?? "piece",
+      tracksSerial: item?.tracksSerial === true,
     };
   });
 

@@ -15,6 +15,7 @@ import type { MessageKey } from "@/lib/i18n";
 import { SERVICE_STATUSES, SERVICE_TONE, localName, serviceKey } from "@/lib/labels";
 import { formatMoney, formatNumber } from "@/lib/money";
 import { formatDate } from "@/lib/dates";
+import { warrantyState } from "@/lib/warranty";
 import { jobIsBillable } from "@/lib/service";
 import { saveJob, consumeParts, setJobStatus } from "@/app/actions/service";
 import { invoiceJob, orderShortage } from "@/app/actions/service-workflow";
@@ -48,6 +49,7 @@ interface NamedShortage {
 }
 
 export function JobClient({
+  unit,
   job,
   customer,
   shortages,
@@ -59,6 +61,8 @@ export function JobClient({
   onHand: onHandRecord,
   locale,
 }: {
+  /** The registered machine this job is for, when it was sold through the ERP. */
+  unit: { soldAt: string | null; warrantyEnd: string | null; invoice: { id: string; number: string } | null } | null;
   job: ServiceJob;
   customer: Customer | undefined;
   shortages: NamedShortage[];
@@ -353,6 +357,29 @@ export function JobClient({
                 {t(job.underWarranty ? "label.active" : "label.inactive")}
               </Badge>
             </DetailRow>
+            {unit && (
+              <>
+                <DetailRow label={t("serial.soldOn")}>
+                  <Num>{formatDate(unit.soldAt, locale)}</Num>
+                  {unit.invoice && (
+                    <>
+                      {" · "}
+                      <Link href={`/invoices/${unit.invoice.id}`} className="text-accent hover:underline">
+                        <Num>{unit.invoice.number}</Num>
+                      </Link>
+                    </>
+                  )}
+                </DetailRow>
+                <DetailRow label={t("serial.warrantyEnd")}>
+                  <Num>{unit.warrantyEnd ? formatDate(unit.warrantyEnd, locale) : "—"}</Num>
+                  {unit.warrantyEnd && (
+                    <Badge tone={warrantyState({ warrantyEnd: unit.warrantyEnd }, job.date) === "active" ? "success" : "muted"}>
+                      {t(warrantyState({ warrantyEnd: unit.warrantyEnd }, job.date) === "active" ? "serial.inWarranty" : "serial.expired")}
+                    </Badge>
+                  )}
+                </DetailRow>
+              </>
+            )}
             <DetailRow label={t("label.laborCharge")}>
               <Num>{money(job.laborCharge)}</Num>
             </DetailRow>

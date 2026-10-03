@@ -94,7 +94,10 @@ export const SPECS: Record<CollectionName, TableSpec> = {
       "fitsItemIds",
       "notes",
       "active",
+      "tracksSerial",
+      "warrantyMonths",
     ],
+    optional: ["tracksSerial", "warrantyMonths"],
   },
   warehouses: {
     table: "warehouses",
@@ -155,7 +158,7 @@ export const SPECS: Record<CollectionName, TableSpec> = {
       prop: "lines",
       table: "sales_invoice_lines",
       parentKey: "invoice_id",
-      fields: DOC_LINE,
+      fields: [...DOC_LINE, "serials"],
     },
   },
   purchaseOrders: {
@@ -224,14 +227,19 @@ export const SPECS: Record<CollectionName, TableSpec> = {
       "notes",
       "closedAt",
       "invoiceId",
+      "unitId",
     ],
-    optional: ["invoiceId"],
+    optional: ["invoiceId", "unitId"],
     children: {
       prop: "parts",
       table: "service_job_parts",
       parentKey: "job_id",
       fields: ["id", "itemId", "qty", "unitPrice", "warehouseId", "consumed"],
     },
+  },
+  units: {
+    table: "units",
+    fields: [...BASE, "itemId", "serialNo", "customerId", "invoiceId", "soldAt", "warrantyEnd", "notes"],
   },
 };
 

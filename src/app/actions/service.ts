@@ -31,6 +31,14 @@ export async function saveJob(id: string | null, input: JobInput): Promise<Resul
   if (!input.customerId) return fail("msg.requiredField");
   if (!input.reportedFault.trim()) return fail("msg.requiredField");
 
+  // A job tied to a unit carries that unit's item and serial, so the two can
+  // never disagree.
+  if (input.unitId) {
+    const unit = (await snapshot()).units.find((u) => u.id === input.unitId);
+    if (!unit) return fail("msg.error", "unit-not-found");
+    input = { ...input, machineItemId: unit.itemId, serialNo: unit.serialNo };
+  }
+
   if (id) {
     // Parts already taken from stock are frozen; only unconsumed ones may change.
     const db = await snapshot();

@@ -70,6 +70,8 @@ function blank(itemType: ItemType, taxRate: number) {
     fitsItemIds: [] as string[],
     notes: "",
     active: true,
+    tracksSerial: false,
+    warrantyMonths: 0,
   };
 }
 
@@ -183,7 +185,7 @@ export function ItemsClient({
     void id;
     void createdAt;
     void updatedAt;
-    setForm(rest);
+    setForm({ ...rest, tracksSerial: rest.tracksSerial ?? false, warrantyMonths: rest.warrantyMonths ?? 0 });
     setEditing(item);
     setError(null);
     setOpen(true);
@@ -635,6 +637,33 @@ export function ItemsClient({
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
             />
           </Field>
+
+          {itemType === "product" && (
+            <>
+              <label className="flex items-start gap-2 text-xs cursor-pointer sm:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={form.tracksSerial === true}
+                  onChange={(e) => setForm({ ...form, tracksSerial: e.target.checked })}
+                  className="accent-[var(--color-accent)] mt-0.5"
+                />
+                <span>
+                  {t("serial.track")}
+                  <span className="block text-2xs text-muted">{t("serial.trackHint")}</span>
+                </span>
+              </label>
+              {form.tracksSerial === true && (
+                <Field label={t("serial.warrantyMonths")}>
+                  <NumberInput
+                    min={0}
+                    step={1}
+                    value={form.warrantyMonths ?? 0}
+                    onChange={(e) => setForm({ ...form, warrantyMonths: Math.max(0, Math.floor(Number(e.target.value))) })}
+                  />
+                </Field>
+              )}
+            </>
+          )}
 
           <label className="flex items-center gap-2 text-xs cursor-pointer sm:col-span-2">
             <input

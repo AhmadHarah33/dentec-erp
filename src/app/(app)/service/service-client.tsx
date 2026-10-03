@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import type { Customer, Item, ServiceJob, User } from "@/lib/data/types";
+import type { Customer, Item, MachineUnit, ServiceJob, User } from "@/lib/data/types";
+import { warrantyState } from "@/lib/warranty";
 import { useT } from "@/lib/i18n/context";
 import type { MessageKey } from "@/lib/i18n";
 import { localName } from "@/lib/labels";
@@ -37,6 +38,7 @@ export function ServiceClient({
   customers,
   items,
   users,
+  units,
   shortages,
   locale,
 }: {
@@ -44,6 +46,8 @@ export function ServiceClient({
   customers: Customer[];
   items: Item[];
   users: User[];
+  /** Machines sold through the ERP, so a job can point at the exact one. */
+  units: MachineUnit[];
   /** Job id → how many distinct parts it is short. Computed on the server. */
   shortages: Record<string, number>;
   locale: string;
@@ -63,12 +67,36 @@ export function ServiceClient({
     machineItemId: "",
     machineLabel: "",
     serialNo: "",
+    unitId: "",
     reportedFault: "",
     technicianId: "",
     date: today(),
     laborCharge: 0,
     underWarranty: false,
   });
+
+  // The chosen customer's registered machines.
+  const customerUnits = useMemo(
+    () => units.filter((u) => newJobForm.customerId && u.customerId === newJobForm.customerId),
+    [units, newJobForm.customerId],
+  );
+  function pickUnit(unitId: string) {
+    const unit = units.find((u) => u.id === unitId);
+    if (!unit) {
+      setNewJobForm({ ...newJobForm, unitId: "" });
+      return;
+    }
+    const item = items.find((i) => i.id === unit.itemId);
+    setNewJobForm({
+      ...newJobForm,
+      unitId,
+      machineItemId: unit.itemId,
+      machineLabel: item ? localName(item, locale) : newJobForm.machineLabel,
+      serialNo: unit.serialNo,
+      // Suggested from the warranty end; the person can still untick it.
+      underWarranty: warrantyState(unit, newJobForm.date) === "active",
+    });
+  }
 
   const stats = useMemo(() => {
     const open = jobs.filter((j) => j.status !== "delivered");
@@ -105,6 +133,7 @@ export function ServiceClient({
         machineItemId: newJobForm.machineItemId || null,
         machineLabel: newJobForm.machineLabel,
         serialNo: newJobForm.serialNo,
+        unitId: newJobForm.unitId || null,
         reportedFault: newJobForm.reportedFault,
         diagnosis: "",
         status: "received",
@@ -124,6 +153,7 @@ export function ServiceClient({
           machineItemId: "",
           machineLabel: "",
           serialNo: "",
+          unitId: "",
           reportedFault: "",
           technicianId: "",
           date: today(),
@@ -261,7 +291,9 @@ export function ServiceClient({
           <Field label={t("label.customer")} required className="sm:col-span-2">
             <Select
               value={newJobForm.customerId}
-              onChange={(e) => setNewJobForm({ ...newJobForm, customerId: e.target.value })}
+              onChange={(e) =>
+                setNewJobForm({ ...newJobForm, customerId: e.target.value, unitId: "" })
+              }
             >
               <option value="">—</option>
               {customers.map((c) => (
@@ -271,6 +303,22 @@ export function ServiceClient({
               ))}
             </Select>
           </Field>
+
+          {customerUnits.length > 0 && (
+            <Field label={t("serial.unit")} className="sm:col-span-2">
+              <Select value={newJobForm.unitId} onChange={(e) => pickUnit(e.target.value)}>
+                <option value="">{t("serial.unitNone")}</option>
+                {customerUnits.map((u) => {
+                  const item = items.find((i) => i.id === u.itemId);
+                  return (
+                    <option key={u.id} value={u.id}>
+                      {(item ? localName(item, locale) : "") + " · " + u.serialNo}
+                    </option>
+                  );
+                })}
+              </Select>
+            </Field>
+          )}
 
           <Field label={t("label.machine")} className="sm:col-span-2">
             <Select

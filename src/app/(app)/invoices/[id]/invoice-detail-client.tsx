@@ -33,6 +33,7 @@ import {
   Num,
   NumberInput,
   Select,
+  Textarea,
 } from "@/components/ui/primitives";
 import { Modal, Confirm } from "@/components/ui/modal";
 import { IconPrint } from "@/components/ui/icons";
@@ -47,6 +48,7 @@ interface LineItem {
   name: string;
   sku: string;
   unit: string;
+  tracksSerial: boolean;
 }
 
 export function InvoiceDetailClient({
@@ -78,6 +80,34 @@ export function InvoiceDetailClient({
   const router = useRouter();
   const [confirming, setConfirming] = useState<"issue" | "void" | "delete" | null>(null);
   const [paying, setPaying] = useState(false);
+  // Serial-tracked lines need their serials before the invoice can be issued.
+  const trackedLines = invoice.lines.filter((l) => lineItems.find((x) => x.id === l.id)?.tracksSerial);
+  const [serialsOpen, setSerialsOpen] = useState(false);
+  const [serialText, setSerialText] = useState<Record<string, string>>({});
+  const parseSerials = (text: string) =>
+    text.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
+  function startIssue() {
+    if (trackedLines.length > 0) {
+      setError(null);
+      setSerialsOpen(true);
+    } else {
+      setConfirming("issue");
+    }
+  }
+  function submitSerials() {
+    const serials = Object.fromEntries(trackedLines.map((l) => [l.id, parseSerials(serialText[l.id] ?? "")]));
+    setError(null);
+    startTransition(async () => {
+      const result = await issueInvoice(invoice.id, serials);
+      if (result.ok) {
+        setSerialsOpen(false);
+        router.refresh();
+      } else {
+        // Stay open: what was typed is still there to correct.
+        setError(t(result.errorKey as MessageKey) + (result.detail ? ` — ${result.detail}` : ""));
+      }
+    });
+  }
   const [error, setError] = useState<string | null>(null);
 
   const base = settings.baseCurrency;
@@ -140,7 +170,7 @@ export function InvoiceDetailClient({
               </Button>
             )}
             {isDraft && canDraft && (
-              <Button variant="primary" onClick={() => setConfirming("issue")}>
+              <Button variant="primary" onClick={startIssue}>
                 {t("action.issue")}
               </Button>
             )}
@@ -430,6 +460,46 @@ export function InvoiceDetailClient({
       </div>
 
       <RecordHistory collection="salesInvoices" id={invoice.id} area="invoices" />
+
+      <Modal
+        open={serialsOpen}
+        onClose={() => setSerialsOpen(false)}
+        title={t("serial.modalTitle")}
+        description={t("serial.modalHint")}
+        footer={
+          <>
+            <Button onClick={() => setSerialsOpen(false)} disabled={pending}>
+              {t("action.cancel")}
+            </Button>
+            <Button variant="primary" onClick={submitSerials} disabled={pending}>
+              {t("action.issue")}
+            </Button>
+          </>
+        }
+      >
+        {error && (
+          <p className="text-2xs text-danger border border-danger-soft bg-danger-soft rounded-sm p-2 mb-3">{error}</p>
+        )}
+        <div className="space-y-4">
+          {trackedLines.map((line) => {
+            const info = lineItems.find((x) => x.id === line.id);
+            return (
+              <Field
+                key={line.id}
+                label={`${info?.name ?? ""} · ${info?.sku ?? ""}`}
+                hint={t("serial.perLine", { qty: line.qty })}
+              >
+                <Textarea
+                  dir="ltr"
+                  rows={Math.min(Math.max(line.qty, 2), 6)}
+                  value={serialText[line.id] ?? ""}
+                  onChange={(e) => setSerialText({ ...serialText, [line.id]: e.target.value })}
+                />
+              </Field>
+            );
+          })}
+        </div>
+      </Modal>
 
       <Confirm
         open={confirming !== null}

@@ -21,6 +21,7 @@ export default async function ServicePage() {
       customers={db.customers}
       items={db.items}
       users={db.users}
+      units={db.units}
       shortages={shortagesByJob(db.serviceJobs, index)}
       locale={locale}
     />

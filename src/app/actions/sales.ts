@@ -13,6 +13,7 @@ import { needsDispatch, normalisePlate } from "@/lib/billing/region";
 import { buildStockIndex, onHand } from "@/lib/stock";
 import { computeTotals, round2, toBase } from "@/lib/money";
 import { paidForInvoice } from "@/lib/queries";
+import { addMonths } from "@/lib/dates";
 import { fail, ok, STOCK_PATHS, type Result } from "./shared";
 import { syncStatus } from "@/lib/invoice-status";
 import { guard } from "@/lib/auth/server";
@@ -142,13 +143,40 @@ export async function setInvoiceBilling(
   return ok(undefined);
 }
 
-export async function issueInvoice(id: string): Promise<Result> {
+/**
+ * `serials` maps a line id to the serial numbers of the units on it. Lines of
+ * serial-tracked items need exactly one serial per unit sold; each becomes a
+ * `units` record carrying the customer, the invoice and the warranty end.
+ */
+export async function issueInvoice(
+  id: string,
+  serials: Record<string, string[]> = {},
+): Promise<Result> {
   const gate = await guard("invoices", "limited");
   if (!gate.ok) return gate;
   const db = await snapshot();
   const invoice = db.salesInvoices.find((i) => i.id === id);
   if (!invoice) return fail("msg.error", "not-found");
   if (invoice.status !== "draft") return fail("msg.error", "not-a-draft");
+
+  // Serials first: a missing one should stop the issue before anything moves.
+  const entered = new Map<string, string[]>();
+  for (const line of invoice.lines) {
+    const item = line.itemId ? db.items.find((i) => i.id === line.itemId) : undefined;
+    if (!item?.tracksSerial) continue;
+    if (!Number.isInteger(line.qty)) return fail("serial.qtyWhole", item.nameAr);
+    const list = (serials[line.id] ?? []).map((s) => s.trim()).filter(Boolean);
+    if (list.length !== line.qty) return fail("serial.count", item.nameAr);
+    entered.set(line.id, list);
+  }
+  const seen = new Set<string>();
+  for (const line of invoice.lines) {
+    for (const s of entered.get(line.id) ?? []) {
+      const key = `${line.itemId}|${s.toLowerCase()}`;
+      if (seen.has(key)) return fail("serial.duplicate", s);
+      seen.add(key);
+    }
+  }
 
   const index = buildStockIndex(db.stockMoves);
   const needed = new Map<string, number>();
@@ -163,12 +191,45 @@ export async function issueInvoice(id: string): Promise<Result> {
     }
   }
 
-  await transaction((store, h) => {
+  const clash = await transaction((store, h) => {
     const row = store.salesInvoices.find((i) => i.id === id)!;
+
+    // Re-checked under the write lock: someone may have sold the same serial
+    // since the page was read. Nothing has been touched yet, so returning
+    // here writes nothing.
+    for (const line of row.lines) {
+      for (const s of entered.get(line.id) ?? []) {
+        if (store.units.some((u) => u.itemId === line.itemId && u.serialNo.toLowerCase() === s.toLowerCase())) {
+          return s;
+        }
+      }
+    }
+
     const ts = h.now();
     row.status = "issued";
     row.issuedAt = ts;
     row.updatedAt = ts;
+
+    for (const line of row.lines) {
+      const list = entered.get(line.id);
+      if (!list || !line.itemId) continue;
+      line.serials = list;
+      const months = store.items.find((i) => i.id === line.itemId)?.warrantyMonths ?? 0;
+      for (const serialNo of list) {
+        store.units.push({
+          id: h.id(),
+          itemId: line.itemId,
+          serialNo,
+          customerId: row.customerId,
+          invoiceId: row.id,
+          soldAt: row.date,
+          warrantyEnd: months > 0 ? addMonths(row.date, months) : null,
+          notes: "",
+          createdAt: ts,
+          updatedAt: ts,
+        });
+      }
+    }
 
     for (const line of row.lines) {
       if (!line.itemId) continue;
@@ -187,7 +248,9 @@ export async function issueInvoice(id: string): Promise<Result> {
         updatedAt: ts,
       });
     }
+    return null;
   });
+  if (clash) return fail("serial.duplicate", clash);
 
   await syncStatus(id);
   refresh(id);
@@ -228,6 +291,10 @@ export async function voidInvoice(id: string): Promise<Result> {
         updatedAt: ts,
       });
     }
+
+    // The machines are no longer sold: drop their records so the serials can
+    // be sold again. Service jobs that pointed at them keep the typed serial.
+    store.units = store.units.filter((u) => u.invoiceId !== id);
 
     row.status = "void";
     row.updatedAt = ts;

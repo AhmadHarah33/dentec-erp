@@ -20,6 +20,9 @@ import { requireAccess } from "@/lib/auth/server";
 import { can } from "@/lib/permissions";
 import { RecordHistory } from "@/components/app/record-history";
 import { StatementCard } from "@/components/app/statement-card";
+import { warrantyState } from "@/lib/warranty";
+import { today } from "@/lib/dates";
+import { localName } from "@/lib/labels";
 
 export default async function CustomerPage({
   params,
@@ -46,6 +49,19 @@ export default async function CustomerPage({
   const payments = db.payments
     .filter((p) => p.partyType === "customer" && p.partyId === id)
     .sort((a, b) => (a.date < b.date ? 1 : -1));
+
+  const machines = db.units
+    .filter((u) => u.customerId === id)
+    .sort((a, b) => ((a.soldAt ?? "") < (b.soldAt ?? "") ? 1 : -1))
+    .map((unit) => {
+      const item = db.items.find((i) => i.id === unit.itemId);
+      return {
+        unit,
+        name: item ? localName(item, locale) : "—",
+        jobs: db.serviceJobs.filter((j) => j.unitId === unit.id).length,
+        invoiceNumber: db.salesInvoices.find((i) => i.id === unit.invoiceId)?.number ?? "",
+      };
+    });
 
   const balance = customerBalance(id, db.salesInvoices, db.payments);
   const billed = invoices.filter(isLive).reduce((s, i) => s + invoiceTotalBase(i), 0);
@@ -239,6 +255,35 @@ export default async function CustomerPage({
           </Card>
         </div>
       </div>
+      {machines.length > 0 && (
+        <Card className="mb-4">
+          <CardHeader title={t("serial.machines")} meta={String(machines.length)} />
+          <div className="divide-y divide-line">
+            {machines.map(({ unit, name, jobs: jobCount, invoiceNumber }) => {
+              const state = warrantyState(unit, today());
+              return (
+                <div key={unit.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-xs">
+                  <span className="font-medium">{name}</span>
+                  <Num className="text-muted">{unit.serialNo}</Num>
+                  <span className="text-2xs text-muted">
+                    {t("serial.soldOn")} <Num>{formatDate(unit.soldAt, locale)}</Num>
+                    {invoiceNumber && <> · <Num>{invoiceNumber}</Num></>}
+                  </span>
+                  <span className="ms-auto flex items-center gap-2">
+                    {jobCount > 0 && <span className="text-2xs text-muted"><Num>{jobCount}</Num> {t("nav.service")}</span>}
+                    <Badge tone={state === "active" ? "success" : "muted"}>
+                      {state === "none"
+                        ? t("serial.noWarranty")
+                        : `${t(state === "active" ? "serial.inWarranty" : "serial.expired")} · ${formatDate(unit.warrantyEnd, locale)}`}
+                    </Badge>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
       {can(member.role, "finance", "view") && <StatementCard customerId={customer.id} />}
 
       <RecordHistory collection="customers" id={id} area="customers" />

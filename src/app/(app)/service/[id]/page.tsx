@@ -37,8 +37,20 @@ export default async function JobPage({
     ? db.salesInvoices.find((i) => i.id === job.invoiceId)
     : undefined;
 
+  const unit = job.unitId ? db.units.find((u) => u.id === job.unitId) : undefined;
+  const unitInvoice = unit?.invoiceId ? db.salesInvoices.find((i) => i.id === unit.invoiceId) : undefined;
+
   return (
     <JobClient
+      unit={
+        unit
+          ? {
+              soldAt: unit.soldAt,
+              warrantyEnd: unit.warrantyEnd,
+              invoice: unitInvoice ? { id: unitInvoice.id, number: unitInvoice.number } : null,
+            }
+          : null
+      }
       job={job}
       customer={db.customers.find((c) => c.id === job.customerId)}
       shortages={shortages}
