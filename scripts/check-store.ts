@@ -38,8 +38,13 @@ const ts = "2026-10-03T10:00:00.000Z";
 const base = (id: string) => ({ id, createdAt: ts, updatedAt: ts });
 
 async function main() {
-  if (!/127\.0\.0\.1|localhost/.test(url)) {
-    throw new Error("check-store only runs against a local database");
+  // It writes test records — including ledger moves, which can never be
+  // deleted — so it refuses any database not obviously a test one.
+  const target = new URL(url);
+  const isDevDb = target.port === "54329";
+  const isTestDb = target.pathname.replace("/", "").endsWith("_test");
+  if (!["127.0.0.1", "localhost"].includes(target.hostname) || !(isDevDb || isTestDb)) {
+    throw new Error("check-store only runs against the local dev database or a *_test database");
   }
 
   await check("empty database: settings, one warehouse, nothing else", async () => {
@@ -183,8 +188,12 @@ async function main() {
   });
 
   await check("the stock ledger refuses an edit and a delete", async () => {
-    await assert.rejects(mutate((db) => void (db.stockMoves[0].qtyDelta = 999)), /append-only/);
-    await assert.rejects(mutate((db) => void db.stockMoves.pop()), /append-only/);
+    // Two layers refuse this: the app role has no UPDATE/DELETE privilege on
+    // the ledger (the error a real deployment sees), and a trigger rejects
+    // it even for the owner (the error the local superuser sees).
+    const refused = /append-only|permission denied for table stock_moves/;
+    await assert.rejects(mutate((db) => void (db.stockMoves[0].qtyDelta = 999)), refused);
+    await assert.rejects(mutate((db) => void db.stockMoves.pop()), refused);
     const db = await reread();
     assert.equal(db.stockMoves.length, 1);
     assert.equal(db.stockMoves[0].qtyDelta, 25);
@@ -239,6 +248,27 @@ async function main() {
       );
     }
     assert.deepEqual(numbers, ["INV-2026-0001", "INV-2026-0002", "INV-2026-0003", "INV-2026-0004", "INV-2026-0005"]);
+  });
+
+  await check("ten simultaneous writes mint ten distinct, consecutive numbers", async () => {
+    // All ten start before any finishes. On a real server with a pool of
+    // several connections they genuinely overlap; the advisory lock is what
+    // keeps each one reading the table as the previous one left it.
+    const minted = await Promise.all(
+      Array.from({ length: 10 }, (_, i) =>
+        mutate((db) => {
+          const n = `PAR-${String(db.salesInvoices.filter((x) => x.number.startsWith("PAR-")).length + 1).padStart(4, "0")}`;
+          db.salesInvoices.push({ ...invoice, id: "par" + i, number: n, lines: [] });
+          return n;
+        }),
+      ),
+    );
+    assert.deepEqual(
+      [...minted].sort(),
+      Array.from({ length: 10 }, (_, i) => `PAR-${String(i + 1).padStart(4, "0")}`),
+    );
+    const db = await reread();
+    assert.equal(db.salesInvoices.filter((x) => x.number.startsWith("PAR-")).length, 10);
   });
 
   await closeDb();

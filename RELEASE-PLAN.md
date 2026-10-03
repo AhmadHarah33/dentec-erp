@@ -63,7 +63,7 @@ never committed.
 - Keyboard focus rings and contrast checks.
 - **Checkpoint:** before/after screenshots.
 
-## Phase 2 — Supabase schema and adapter (local part ✅ 2026-10-03; server part waits on SSH)
+## Phase 2 — Supabase schema and adapter ✅ 2026-10-03, awaiting owner approval
 
 - SQL migrations in `supabase/migrations/`, one table per collection plus child
   tables for document lines, `numeric(14,2)` money, real foreign keys.
@@ -80,6 +80,24 @@ never committed.
   Vercel read-only workarounds. Settings shows the database status instead of a
   data folder.
 - **Checkpoint:** every workflow passes against an empty Supabase.
+
+### Server state after Phase 2
+
+- `erp` schema installed in the `postgres` database (migration 0001, recorded
+  in `erp.schema_migrations`). Empty apart from settings and one warehouse.
+- Role `dentec_app`: login, password in
+  `/DATA/AppData/dentec-erp/secrets/dentec_app_db_password` (mode 600, never
+  printed). Network logins require it (scram); it cannot read `public`,
+  `auth` or any Supabase schema, and cannot update or delete stock moves.
+- Backup taken before any change:
+  `/DATA/AppData/dentec-erp/backups/before-erp-schema-20261003-211047.dump`.
+- **Left in place, owner to decide:** test database `dentec_erp_test` and
+  login role `dentec_test` (member of `dentec_app`), used to run the store
+  suite on the real server. Removing them is the owner's call.
+- The owner's own data (`public.app_config`, `public.memories`,
+  `public.song_of_the_day`) and every Supabase container are untouched.
+  Rule: never reset, recreate, restart or delete anything Supabase without
+  explicit approval.
 
 ## Phase 3 — Accounts
 
