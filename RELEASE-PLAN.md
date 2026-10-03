@@ -119,13 +119,20 @@ signs in; a spent link is refused; revoked session lands on login; technician
 is refused invoices, purchasing, accounting, reports and settings; typecheck
 and `npm run build` clean.
 
+**Server state (2026-10-04):** migrations 0002 (accounts) and 0003
+(`service_lead` role) applied and recorded. Backup before:
+`/DATA/AppData/dentec-erp/backups/before-accounts-20261004-001726.dump`.
+SSH user is `Ahmed-Arslan` (key `dentec_deploy`). People created, no passwords
+or links yet: Ahmed Arslan and Abdulmunim Arslan (owners), Adel Heylani
+(`service_lead`: service + stock edit, suppliers/POs view, cost-free reports),
+The Accountant (`dentec.team@gmail.com`). Mohammed Tesawi (technician) is added
+when his email is known.
+
 **Still to do before the checkpoint:**
-1. `0002_accounts.sql` is NOT yet applied to the server (`npm run db:migrate`
-   with the admin URL, as in Phase 2).
-2. Create the owner account on the server:
-   `DATABASE_URL=… APP_URL=… npx tsx scripts/create-owner.ts --email <owner email> --name "<name>"`
-   (needs the owner's login email; prints a one-time link).
-3. Owner confirms the role matrix, then Phase 4.
+1. Once the app runs against the server DB (Phase 5 container, or a local run
+   through an SSH tunnel), issue each person's invite link:
+   `npx tsx scripts/create-owner.ts --email harahahmad33@gmail.com` (links last 24 h).
+2. Owner confirms the role matrix, then Phase 4.
 
 ## Phase 3 — Accounts
 
