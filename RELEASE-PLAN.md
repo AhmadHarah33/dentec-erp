@@ -148,23 +148,42 @@ when his email is known.
 - A one-time bootstrap script creates the owner account.
 - **Checkpoint:** log in as each role and confirm what is allowed and refused.
 
-## Phase 4 — Features
+## Phase 4 — Features — built 2026-10-04, tested locally; server steps pending
 
-- **Audit log:** Postgres triggers record actor, time, table, record and
-  before/after for every change. Shown in Settings → Activity and as a history
-  section in each drawer.
-- **Partial PO receipts:** received quantity per line, a "partially received"
-  status, and each receipt writes its own stock moves.
-- **Customer statement:** invoices, payments and a running balance over a date
-  range. Printable and PDF.
-- **Serial + warranty:** items can track serials. Issuing an invoice asks for
-  them. A unit records its customer, invoice and warranty end. Service jobs
-  link to the exact unit, and the customer page lists their machines.
-- **Import:** Settings → Import for products, parts, customers, suppliers and
-  opening stock, from `.xlsx`/`.csv` templates, with a preview and
-  row-by-row validation before anything is written.
-- **Backups:** a nightly `pg_dump` container on the server keeps 30 days. A
-  restore is tested once, for real.
+All built and verified on the local throwaway database (`npm run test:store`
+15 checks, `npm run test:import`, typecheck, production build). The migrations
+0004-0006 are **not yet on the server**.
+
+- **Audit log** ✅ `0005`. Written by the app inside the same transaction as
+  every change (a diff of the database before and after), so it cannot drift
+  from the data and also records invoice/PO line edits. Append-only (a trigger
+  rejects UPDATE/DELETE). Settings → Activity (owner) and a "History" card on
+  invoice, purchase order, service job, customer and supplier pages, shown to
+  whoever may edit that area. *Deviation from the plan:* app-level diff rather
+  than Postgres triggers, because triggers cannot see the signed-in person
+  (the app uses one database role) or line-item changes. The stock ledger is
+  not repeated in the log; it is its own append-only record.
+- **Partial PO receipts** ✅ `0004`. Per-line received quantity; each delivery
+  writes its own stock moves; a "partially received" status; receipts list on
+  the order. A partly received order cannot be cancelled.
+- **Customer statement** ✅ no migration. Customer page → pick a period →
+  print view or PDF. Opening balance, invoices (debit), payments (credit),
+  running balance in base currency; closing equals the customer's balance.
+  Needs finance + customer view (owner, accountant, viewer).
+- **Serial + warranty** ✅ `0006`. Items flagged "track serial" with warranty
+  months. Issuing an invoice asks for one serial per unit; each becomes a unit
+  (customer, invoice, warranty end). Voiding the invoice releases the serials.
+  Service jobs pick the exact unit (suggests warranty status) and show sale
+  date and warranty end; the customer page lists their machines; serials print
+  on the invoice.
+- **Import** ✅ no migration. Settings → Import: products, spare parts,
+  customers, suppliers, opening stock from CSV or .xlsx with a template
+  download. Preview with row-by-row errors; all-or-nothing write that
+  re-validates under the write lock.
+- **Backups** — scripts written (`deploy/backup.sh`, `deploy/restore-test.sh`),
+  **not installed**. Installing means a cron entry for the deploy user on the
+  server, one real backup and one restore test into a scratch database
+  (`dentec_restore_test`, dropped afterwards). Needs the owner's go-ahead.
 - **Checkpoint:** demo of each feature.
 
 ## Phase 5 — Deployment
