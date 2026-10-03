@@ -689,6 +689,21 @@ const ar = {
   "print.preparing": "جارٍ التجهيز…",
   "print.failed": "تعذّر إنشاء الملف",
   "print.page": "صفحة",
+  "statement.title": "كشف حساب",
+  "statement.period": "الفترة",
+  "statement.fromStart": "من البداية",
+  "statement.document": "المستند",
+  "statement.debit": "مدين",
+  "statement.credit": "دائن",
+  "statement.opening": "الرصيد الافتتاحي",
+  "statement.closing": "الإجمالي والرصيد الختامي",
+  "statement.invoice": "فاتورة",
+  "statement.payment": "دفعة",
+  "statement.noActivity": "لا توجد حركات في هذه الفترة",
+  "statement.note": "المبالغ بالعملة الأساسية للشركة وبأسعار الصرف المثبّتة على كل مستند. الفواتير المسودة والملغاة غير مشمولة.",
+  "statement.card": "كشف حساب العميل",
+  "statement.cardHint": "فواتير ودفعات العميل بالترتيب الزمني مع الرصيد المتحرك. اترك «من» فارغاً لإظهار كل التاريخ.",
+  "statement.open": "عرض للطباعة",
 } as const;
 
 export type MessageKey = keyof typeof ar;

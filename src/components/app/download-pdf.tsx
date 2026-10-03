@@ -16,9 +16,12 @@ import { IconDownload } from "@/components/ui/icons";
 export function DownloadPdfButton({
   kind,
   id,
+  href,
 }: {
-  kind: "invoices" | "purchases";
+  kind?: "invoices" | "purchases";
   id: string;
+  /** Full URL of the PDF route, for documents that do not follow /api/<kind>/<id>/pdf. */
+  href?: string;
 }) {
   const { t } = useLocale();
   const [busy, setBusy] = useState(false);
@@ -28,7 +31,7 @@ export function DownloadPdfButton({
     setBusy(true);
     setFailed(false);
     try {
-      const response = await fetch(`/api/${kind}/${id}/pdf`);
+      const response = await fetch(href ?? `/api/${kind}/${id}/pdf`);
       if (!response.ok) throw new Error(String(response.status));
 
       const blob = await response.blob();

@@ -9,6 +9,7 @@ import { attachmentHeader, renderPdf } from "./render";
 import { loadDocument, pdfFilename, type DocumentKind } from "./document";
 import { currentMember } from "@/lib/auth/server";
 import { can } from "@/lib/permissions";
+import { loadStatement, readDate, statementFilename } from "./statement-doc";
 
 export async function handlePdfRequest(
   request: NextRequest,
@@ -66,5 +67,44 @@ export async function handlePdfRequest(
       { error: "render_failed", detail: message },
       { status: 500 },
     );
+  }
+}
+
+/** The customer statement as a PDF: same renderer, same forwarded session. */
+export async function handleStatementPdf(request: NextRequest, customerId: string): Promise<Response> {
+  const member = await currentMember();
+  if (!member) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  if (!can(member.role, "finance", "view") || !can(member.role, "customers", "view")) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  const from = request.nextUrl.searchParams.get("from");
+  const to = request.nextUrl.searchParams.get("to");
+  const loaded = await loadStatement(customerId, from, to);
+  if (!loaded) return NextResponse.json({ error: "not_found" }, { status: 404 });
+
+  const origin = (process.env.INTERNAL_ORIGIN ?? request.nextUrl.origin).replace(/\/$/, "");
+  const query = new URLSearchParams();
+  if (readDate(from)) query.set("from", from!);
+  if (readDate(to)) query.set("to", to!);
+
+  try {
+    const pdf = await renderPdf({
+      url: `${origin}/print/statement/${customerId}${query.size ? `?${query}` : ""}`,
+      origin,
+      cookies: request.cookies.getAll().map((c) => ({ name: c.name, value: c.value })),
+    });
+    return new Response(new Uint8Array(pdf), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": attachmentHeader(statementFilename(loaded.customer, loaded.statement)),
+        "Content-Length": String(pdf.length),
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[pdf] statement ${customerId} failed:`, message);
+    return NextResponse.json({ error: "render_failed", detail: message }, { status: 500 });
   }
 }

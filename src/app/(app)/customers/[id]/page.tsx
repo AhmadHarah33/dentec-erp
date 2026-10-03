@@ -19,6 +19,7 @@ import type { MessageKey } from "@/lib/i18n";
 import { requireAccess } from "@/lib/auth/server";
 import { can } from "@/lib/permissions";
 import { RecordHistory } from "@/components/app/record-history";
+import { StatementCard } from "@/components/app/statement-card";
 
 export default async function CustomerPage({
   params,
@@ -238,6 +239,8 @@ export default async function CustomerPage({
           </Card>
         </div>
       </div>
+      {can(member.role, "finance", "view") && <StatementCard customerId={customer.id} />}
+
       <RecordHistory collection="customers" id={id} area="customers" />
 
     </>

@@ -692,6 +692,21 @@ const tr: Record<MessageKey, string> = {
   "print.preparing": "Hazırlanıyor…",
   "print.failed": "Dosya oluşturulamadı",
   "print.page": "Sayfa",
+  "statement.title": "Hesap ekstresi",
+  "statement.period": "Dönem",
+  "statement.fromStart": "Baştan",
+  "statement.document": "Belge",
+  "statement.debit": "Borç",
+  "statement.credit": "Alacak",
+  "statement.opening": "Açılış bakiyesi",
+  "statement.closing": "Toplam ve kapanış bakiyesi",
+  "statement.invoice": "Fatura",
+  "statement.payment": "Ödeme",
+  "statement.noActivity": "Bu dönemde hareket yok",
+  "statement.note": "Tutarlar şirketin ana para biriminde ve her belgede sabitlenen kurla gösterilir. Taslak ve iptal edilen faturalar dahil değildir.",
+  "statement.card": "Müşteri hesap ekstresi",
+  "statement.cardHint": "Müşterinin fatura ve ödemeleri tarih sırasıyla, yürüyen bakiyeyle. Tüm geçmiş için «Başlangıç»ı boş bırakın.",
+  "statement.open": "Yazdırma görünümü",
 } as const;
 
 export default tr;
