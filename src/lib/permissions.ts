@@ -34,7 +34,7 @@ const RANK: Record<Level, number> = { none: 0, view: 1, limited: 2, edit: 3 };
  * `limited` means, per area:
  *   invoices — create, edit and issue drafts; not void, record payments or
  *              delete anything issued (sales)
- *   reports  — sales figures only: no cost, margin or stock valuation (sales)
+ *   reports  — no cost, margin or stock valuation (sales, service_lead)
  */
 export const MATRIX: Record<Role, Record<Area, Level>> = {
   owner: {
@@ -81,6 +81,20 @@ export const MATRIX: Record<Role, Record<Area, Level>> = {
     finance: "none",
     service: "edit",
     reports: "none",
+    settings: "none",
+  },
+  // Head of technical service: a technician who also runs the parts side —
+  // stock counts and moves, supplier and purchase-order visibility, and
+  // cost-free reports (the same `limited` view as sales).
+  service_lead: {
+    catalog: "view",
+    inventory: "edit",
+    customers: "view",
+    purchasing: "view",
+    invoices: "none",
+    finance: "none",
+    service: "edit",
+    reports: "limited",
     settings: "none",
   },
   viewer: {
@@ -145,7 +159,7 @@ export type DashboardFocus = "owner" | "accounting" | "service";
 
 export function dashboardFocus(role: Role): DashboardFocus {
   if (role === "accountant") return "accounting";
-  if (role === "technician") return "service";
+  if (role === "technician" || role === "service_lead") return "service";
   return "owner";
 }
 

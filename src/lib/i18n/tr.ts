@@ -156,6 +156,7 @@ const tr: Record<MessageKey, string> = {
   "role.accountant": "Muhasebeci",
   "role.sales": "Satış",
   "role.technician": "Teknisyen",
+  "role.service_lead": "Teknik Servis Sorumlusu",
   "role.viewer": "İzleyici",
 
   /* Party kinds --------------------------------------------------- */

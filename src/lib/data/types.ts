@@ -151,7 +151,7 @@ export interface DispatchInfo {
 /* People                                                              */
 /* ------------------------------------------------------------------ */
 
-export type Role = "owner" | "accountant" | "sales" | "technician" | "viewer";
+export type Role = "owner" | "accountant" | "sales" | "technician" | "service_lead" | "viewer";
 
 export interface User extends Base {
   name: string;

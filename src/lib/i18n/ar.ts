@@ -153,6 +153,7 @@ const ar = {
   "role.accountant": "محاسب",
   "role.sales": "مبيعات",
   "role.technician": "فني",
+  "role.service_lead": "مسؤول الخدمة الفنية",
   "role.viewer": "مطالع",
 
   /* Party kinds --------------------------------------------------- */
