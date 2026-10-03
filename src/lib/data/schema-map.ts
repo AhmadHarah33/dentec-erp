@@ -181,7 +181,7 @@ export const SPECS: Record<CollectionName, TableSpec> = {
       prop: "lines",
       table: "purchase_order_lines",
       parentKey: "order_id",
-      fields: DOC_LINE,
+      fields: [...DOC_LINE, "receivedQty"],
     },
   },
   payments: {

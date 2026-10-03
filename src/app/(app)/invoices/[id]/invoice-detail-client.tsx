@@ -40,6 +40,7 @@ import { DownloadPdfButton } from "@/components/app/download-pdf";
 import { InvoiceBilling } from "@/components/app/invoice-billing";
 import { DateInput } from "@/components/ui/date-input";
 import { useCan } from "@/components/app/member-context";
+import { RecordHistory } from "@/components/app/record-history";
 
 interface LineItem {
   id: string;
@@ -427,6 +428,8 @@ export function InvoiceDetailClient({
           </div>
         </div>
       </div>
+
+      <RecordHistory collection="salesInvoices" id={invoice.id} area="invoices" />
 
       <Confirm
         open={confirming !== null}

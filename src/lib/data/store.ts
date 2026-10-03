@@ -22,6 +22,7 @@
 
 import postgres from "postgres";
 import { COLLECTIONS, SPECS, snake, tablesOf, type ChildSpec, type TableSpec } from "./schema-map";
+import { diffDatabases, type Actor } from "./audit-diff";
 import type { CollectionName, Database, Settings } from "./types";
 
 type Sql = postgres.Sql<Record<string, unknown>>;
@@ -264,11 +265,30 @@ async function writeCollection(tx: Tx, spec: TableSpec, before: Row[], after: Ro
 }
 
 /**
+ * Who is making this write, for the audit log. The auth module is imported
+ * lazily: it depends on this one, and scripts and tests run outside any
+ * request, where there is no one signed in.
+ */
+async function currentActor(): Promise<Actor> {
+  try {
+    const { currentMember } = await import("@/lib/auth/server");
+    const member = await currentMember();
+    if (member) return { id: member.user.id, name: member.user.name, role: member.role };
+  } catch {
+    // No request, no session: recorded as the system.
+  }
+  return { id: null, name: "", role: "" };
+}
+
+/**
  * Apply a mutation and persist it. The callback receives a private copy of
  * the database and may modify it in place; whatever it returns is returned
  * to the caller once the transaction has committed.
  */
 export async function mutate<T>(fn: (db: Database) => T | Promise<T>): Promise<T> {
+  // Resolved before the transaction opens: looking up the session needs a
+  // connection of its own, and a pool of one would wait on itself.
+  const actor = await currentActor();
   const { result, fresh, versions } = await sql().begin(async (tx) => {
     await tx`select pg_advisory_xact_lock(${WRITE_LOCK})`;
     const { db: fresh, versions } = await refresh(tx, state.cache, state.versions);
@@ -286,6 +306,23 @@ export async function mutate<T>(fn: (db: Database) => T | Promise<T>): Promise<T
         fresh[name] as unknown as Row[],
         draft[name] as unknown as Row[],
       );
+    }
+
+    const entries = diffDatabases(fresh, draft);
+    if (entries.length > 0) {
+      await tx`insert into erp.audit_log ${tx(
+        entries.map((e) => ({
+          actor_id: actor.id,
+          actor_name: actor.name,
+          actor_role: actor.role,
+          collection: e.collection,
+          record_id: e.record_id,
+          label: e.label,
+          action: e.action,
+          before: e.before ? tx.json(e.before as postgres.JSONValue) : null,
+          after: e.after ? tx.json(e.after as postgres.JSONValue) : null,
+        })),
+      )}`;
     }
     return { result, fresh, versions };
   });

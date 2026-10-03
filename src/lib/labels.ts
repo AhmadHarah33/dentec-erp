@@ -94,7 +94,8 @@ export function invoiceKey(s: InvoiceStatus): MessageKey {
   return `status.${s}` as MessageKey;
 }
 export function purchaseKey(s: PurchaseStatus): MessageKey {
-  return `status.${s}` as MessageKey;
+  // "partial" on an invoice means partly paid; on a purchase order, partly received.
+  return (s === "partial" ? "status.partialReceived" : `status.${s}`) as MessageKey;
 }
 export function serviceKey(s: ServiceStatus): MessageKey {
   return `service.${s}` as MessageKey;

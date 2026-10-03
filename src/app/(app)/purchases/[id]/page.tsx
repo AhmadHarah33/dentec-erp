@@ -31,8 +31,17 @@ export default async function PurchaseDetailPage({
     ? db.serviceJobs.find((j) => j.id === order.serviceJobId)
     : undefined;
 
+  // Each delivery wrote its own stock moves; group them by day for the receipts list.
+  const receipts = new Map<string, number>();
+  for (const m of db.stockMoves) {
+    if (m.refType === "purchase_order" && m.refId === order.id && m.type === "purchase") {
+      receipts.set(m.date, (receipts.get(m.date) ?? 0) + m.qtyDelta);
+    }
+  }
+
   return (
     <PurchaseDetailClient
+      receipts={[...receipts].sort(([a], [b]) => (a < b ? -1 : 1)).map(([date, qty]) => ({ date, qty }))}
       order={order}
       job={job ? { id: job.id, number: job.number } : null}
       supplier={supplier}

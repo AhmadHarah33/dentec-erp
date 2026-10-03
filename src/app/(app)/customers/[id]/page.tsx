@@ -18,6 +18,7 @@ import { IconCoins, IconChart, IconCheck, IconDocument } from "@/components/ui/i
 import type { MessageKey } from "@/lib/i18n";
 import { requireAccess } from "@/lib/auth/server";
 import { can } from "@/lib/permissions";
+import { RecordHistory } from "@/components/app/record-history";
 
 export default async function CustomerPage({
   params,
@@ -237,6 +238,8 @@ export default async function CustomerPage({
           </Card>
         </div>
       </div>
+      <RecordHistory collection="customers" id={id} area="customers" />
+
     </>
   );
 }

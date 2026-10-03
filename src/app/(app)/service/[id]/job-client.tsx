@@ -36,6 +36,7 @@ import { IconAlert, IconCart, IconDocument } from "@/components/ui/icons";
 import { Modal, Confirm } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { useCan } from "@/components/app/member-context";
+import { RecordHistory } from "@/components/app/record-history";
 
 /** A shortage row, already resolved to a name by the server page. */
 interface NamedShortage {
@@ -600,6 +601,8 @@ export function JobClient({
           </Card>
         </div>
       </div>
+
+      <RecordHistory collection="serviceJobs" id={job.id} area="service" />
 
       {/* Edit Diagnosis Modal ---------------------------------------- */}
       <Modal

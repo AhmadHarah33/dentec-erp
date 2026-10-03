@@ -298,6 +298,8 @@ export interface DocumentLine {
   unitPrice: number; // in the currency of the parent document
   discountPercent: number;
   taxRate: number; // percent
+  /** Purchase orders only: how much of this line has been received so far. Empty reads as 0. */
+  receivedQty?: number;
 }
 
 export interface SalesInvoice extends Base {

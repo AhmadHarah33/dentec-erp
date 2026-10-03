@@ -18,4 +18,5 @@ export const SETTINGS_TABS: TabDef[] = [
   { href: "/settings", labelKey: "tab.general" },
   { href: "/settings/warehouses", labelKey: "nav.warehouses" },
   { href: "/settings/users", labelKey: "nav.users" },
+  { href: "/settings/activity", labelKey: "nav.activity" },
 ];

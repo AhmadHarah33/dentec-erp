@@ -15,6 +15,7 @@ import { Badge, Card, CardHeader, Num, LinkButton } from "@/components/ui/primit
 import { IconCart, IconChart, IconCheck, IconCoins } from "@/components/ui/icons";
 import type { MessageKey } from "@/lib/i18n";
 import { requireAccess } from "@/lib/auth/server";
+import { RecordHistory } from "@/components/app/record-history";
 
 export default async function SupplierPage({
   params,
@@ -179,6 +180,8 @@ export default async function SupplierPage({
           </Card>
         </div>
       </div>
+      <RecordHistory collection="suppliers" id={id} area="purchasing" />
+
     </>
   );
 }
