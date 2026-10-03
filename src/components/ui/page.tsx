@@ -209,7 +209,9 @@ export function ListRow({
         className="flex items-center gap-3 px-4 h-12 hover:bg-sunken active:bg-sunken transition-colors duration-[var(--dur-swift)]"
       >
         <div className="min-w-0 flex-1">
-          <div className="text-xs font-medium truncate">{title}</div>
+          <div className="text-xs font-medium truncate">
+            <span className="[unicode-bidi:plaintext]">{title}</span>
+          </div>
           {subtitle && <div className="text-2xs text-faint truncate">{subtitle}</div>}
         </div>
         {badge}
@@ -264,7 +266,10 @@ export function DetailRow({
   return (
     <div className="flex items-baseline justify-between gap-4 py-2 text-xs">
       <span className="text-muted shrink-0">{label}</span>
-      <span className="text-ink text-end min-w-0 truncate">{children}</span>
+      <span className="text-ink text-end min-w-0 truncate">
+        {/* Inline isolate: see the matching note in DataTable. */}
+        <span className="[unicode-bidi:plaintext]">{children}</span>
+      </span>
     </div>
   );
 }

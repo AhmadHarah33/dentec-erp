@@ -165,7 +165,9 @@ export function AttentionRow({
         className="flex items-center gap-3 px-4 sm:px-5 min-h-12 py-2 hover:bg-sunken active:bg-sunken transition-colors duration-[var(--dur-swift)]"
       >
         <span className="min-w-0 flex-1">
-          <span className="block text-xs font-medium truncate">{title}</span>
+          <span className="block text-xs font-medium truncate">
+            <span className="[unicode-bidi:plaintext]">{title}</span>
+          </span>
           {subtitle && <span className="block text-2xs text-faint truncate">{subtitle}</span>}
         </span>
         {status && (

@@ -171,6 +171,14 @@ ltr`, and logical properties resolve against an element's *own* direction, so
 `ms-2` on a Num is a left margin even in Arabic. Put the margin on a wrapper
 (`<span className="ms-2"><Num>…</Num></span>`) or use `gap` on the parent.
 
+**Latin text inside Arabic layout gets an inline isolate.** A name like
+"Siger Medical Co." in an RTL cell renders as ".Siger Medical Co" — the bidi
+algorithm moves trailing punctuation to the Arabic side. `DataTable` cells,
+`DetailRow` values and queue-row titles wrap their content in
+`<span className="[unicode-bidi:plaintext]">`. It must be an *inline* wrapper:
+`plaintext` on a block or a `<td>` also flips the alignment, pushing Latin
+names to the left edge of an Arabic column (measured, not assumed).
+
 **Identifier inputs are LTR.** Phone (`type="tel"`), email, SKU, tax ID and
 serial fields carry `dir="ltr"` (tel/email get it from CSS); a base rule
 right-aligns them inside an Arabic form. Do not add `text-start` — it would

@@ -122,5 +122,4 @@ export async function transaction<T>(
   return mutate((db) => fn(db, { id: newId, now }));
 }
 
-export { resetDb } from "./store";
-export { dataDir } from "./store";
+export { databaseLabel } from "./store";

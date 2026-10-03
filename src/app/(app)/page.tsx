@@ -45,6 +45,7 @@ import {
   IconWrench,
 } from "@/components/ui/icons";
 import { SERVICE_TONE, serviceKey } from "@/lib/labels";
+import { SetupChecklist } from "@/components/app/setup-checklist";
 import { countedPhrase, type CountedNoun } from "@/lib/plural";
 
 /**
@@ -390,6 +391,8 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
           </>
         }
       />
+
+      <SetupChecklist db={db} t={t} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">{tiles}</div>
 

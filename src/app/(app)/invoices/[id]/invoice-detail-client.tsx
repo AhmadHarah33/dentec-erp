@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type {
   Party,
   Payment,
@@ -17,6 +18,7 @@ import { formatDate, today } from "@/lib/dates";
 import {
   issueInvoice,
   voidInvoice,
+  deleteInvoice,
   recordInvoicePayment,
 } from "@/app/actions/sales";
 import { PageHeader, DetailRow, EmptyState } from "@/components/ui/page";
@@ -66,7 +68,8 @@ export function InvoiceDetailClient({
 }) {
   const t = useT();
   const [pending, startTransition] = useTransition();
-  const [confirming, setConfirming] = useState<"issue" | "void" | null>(null);
+  const router = useRouter();
+  const [confirming, setConfirming] = useState<"issue" | "void" | "delete" | null>(null);
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -124,6 +127,11 @@ export function InvoiceDetailClient({
               {t("action.print")}
             </Button>
             <DownloadPdfButton kind="invoices" id={invoice.id} />
+            {isDraft && (
+              <Button variant="danger" onClick={() => setConfirming("delete")}>
+                {t("action.delete")}
+              </Button>
+            )}
             {isDraft && (
               <Button variant="primary" onClick={() => setConfirming("issue")}>
                 {t("action.issue")}
@@ -417,16 +425,44 @@ export function InvoiceDetailClient({
       <Confirm
         open={confirming !== null}
         onClose={() => setConfirming(null)}
-        onConfirm={() =>
+        onConfirm={() => {
+          if (confirming === "delete") {
+            // A draft has moved no stock and taken no payment, so it can go
+            // outright; there is nothing left to show, so leave the page.
+            setError(null);
+            startTransition(async () => {
+              const result = await deleteInvoice(invoice.id);
+              if (result.ok) router.push("/invoices");
+              else setError(t(result.errorKey as MessageKey));
+            });
+            return;
+          }
           run(() =>
             confirming === "issue" ? issueInvoice(invoice.id) : voidInvoice(invoice.id),
-          )
+          );
+        }}
+        title={
+          confirming === "issue"
+            ? t("action.issue")
+            : confirming === "delete"
+              ? t("action.delete")
+              : t("action.void")
         }
-        title={confirming === "issue" ? t("action.issue") : t("action.void")}
         message={
-          error ?? (confirming === "issue" ? t("msg.confirmIssue") : t("msg.confirmVoid"))
+          error ??
+          (confirming === "issue"
+            ? t("msg.confirmIssue")
+            : confirming === "delete"
+              ? t("msg.confirmDeleteHint")
+              : t("msg.confirmVoid"))
         }
-        confirmLabel={confirming === "issue" ? t("action.issue") : t("action.void")}
+        confirmLabel={
+          confirming === "issue"
+            ? t("action.issue")
+            : confirming === "delete"
+              ? t("action.delete")
+              : t("action.void")
+        }
         tone={confirming === "issue" ? "primary" : "danger"}
         pending={pending}
       />

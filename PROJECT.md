@@ -13,7 +13,7 @@ exposed through a tunnel. Arabic now, Turkish later.
 | Area | Decision |
 |---|---|
 | Hosting | Self-hosted, tunnel in front |
-| Database | None yet — JSON file behind a repository interface; Supabase (self-hosted, via CLI) later |
+| Database | Postgres on the self-hosted Supabase, private `erp` schema (release Phase 2) |
 | Accounting | Invoices, payments, balances. No double-entry |
 | Auth | **None in v1.** Users and roles exist as data only |
 | Invoicing | Per-line VAT, discounts, printable A4, multi-currency |

@@ -63,14 +63,15 @@ never committed.
 - Keyboard focus rings and contrast checks.
 - **Checkpoint:** before/after screenshots.
 
-## Phase 2 — Supabase schema and adapter
+## Phase 2 — Supabase schema and adapter (local part ✅ 2026-10-03; server part waits on SSH)
 
 - SQL migrations in `supabase/migrations/`, one table per collection plus child
   tables for document lines, `numeric(14,2)` money, real foreign keys.
 - `stock_moves` is append-only, enforced in the database (a trigger rejects
   UPDATE/DELETE), not just by convention.
-- Document numbers come from per-type sequences, so two users can never mint
-  the same invoice number.
+- ~~Per-type sequences~~ — not needed: writes are serialised by a
+  transaction-scoped advisory lock and `number` is UNIQUE, so two users can
+  never mint the same document number.
 - A new adapter behind `repository.ts` uses a direct server-side Postgres
   connection, so `transaction()` is a real BEGIN/COMMIT. An invoice and its
   stock moves still land together or not at all.

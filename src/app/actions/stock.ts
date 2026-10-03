@@ -50,6 +50,16 @@ export async function deleteWarehouse(id: string): Promise<Result> {
   if (db.stockMoves.some((m) => m.warehouseId === id)) {
     return fail("msg.error", "warehouse-has-moves");
   }
+  // A draft document or a planned service part names the warehouse too; the
+  // database's foreign keys would refuse the delete, so refuse it here first
+  // with a message instead of an error page.
+  if (
+    db.salesInvoices.some((i) => i.warehouseId === id) ||
+    db.purchaseOrders.some((o) => o.warehouseId === id) ||
+    db.serviceJobs.some((j) => j.parts.some((p) => p.warehouseId === id))
+  ) {
+    return fail("msg.error", "warehouse-in-use");
+  }
   if (db.warehouses.length <= 1) return fail("msg.error", "last-warehouse");
   await remove("warehouses", id);
   refresh();

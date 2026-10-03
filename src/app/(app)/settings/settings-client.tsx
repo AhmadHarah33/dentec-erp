@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import type { Settings, CurrencyCode } from "@/lib/data/types";
 import { useT } from "@/lib/i18n/context";
 import type { MessageKey } from "@/lib/i18n";
-import { updateSettings, resetDemoData } from "@/app/actions/admin";
+import { updateSettings } from "@/app/actions/admin";
 import { PageHeader } from "@/components/ui/page";
 import {
   Button,
@@ -16,7 +16,6 @@ import {
   NumberInput,
   Select,
 } from "@/components/ui/primitives";
-import { Confirm } from "@/components/ui/modal";
 import { PageTabs } from "@/components/ui/tabs";
 import { SETTINGS_TABS } from "@/lib/tabs";
 import { IconPlus, IconTrash } from "@/components/ui/icons";
@@ -26,17 +25,17 @@ const CURRENCY_CODES: CurrencyCode[] = ["USD", "TRY", "SAR", "AED", "EUR", "SYP"
 
 export function SettingsClient({
   settings,
-  dataDir,
+  database,
 }: {
   settings: Settings;
-  dataDir: string;
+  /** host:port/db of the live database, shown so the owner knows where data lives. */
+  database: string;
 }) {
   const t = useT();
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [form, setForm] = useState(settings);
   const [error, setError] = useState<string | null>(null);
-  const [resetting, setResetting] = useState(false);
 
   function saveForm() {
     setError(null);
@@ -50,16 +49,6 @@ export function SettingsClient({
     });
   }
 
-  function confirmReset() {
-    setResetting(false);
-    setError(null);
-    startTransition(async () => {
-      const result = await resetDemoData();
-      if (!result.ok) {
-        setError(t(result.errorKey as MessageKey));
-      }
-    });
-  }
 
   const baseCurrencyCode = form.baseCurrency;
 
@@ -288,21 +277,11 @@ export function SettingsClient({
         </div>
       </Card>
 
-      {/* Data Location & Reset */}
-      <div className="p-4 rounded-sm border border-line bg-surface text-2xs text-muted">
-        <p className="mb-2">{t("page.settings.dataLocation")}</p>
-        <div className="flex items-center gap-2 mb-4">
-          <Num className="font-mono text-faint">{dataDir}</Num>
-        </div>
-        <Button
-          variant="danger"
-          onClick={() => setResetting(true)}
-        >
-          <IconTrash />
-          {t("action.reset")}
-        </Button>
+      {/* Where the data lives */}
+      <div className="px-4 py-3 rounded-lg border border-line bg-surface text-2xs text-muted flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span>{t("page.settings.dataLocation")}</span>
+        <Num className="text-faint">{database}</Num>
       </div>
-
       </div>
 
       {/* Feedback */}
@@ -312,16 +291,6 @@ export function SettingsClient({
         </div>
       )}
 
-      {/* Reset Confirmation */}
-      <Confirm
-        open={resetting}
-        onClose={() => setResetting(false)}
-        onConfirm={confirmReset}
-        title={t("action.reset")}
-        message={t("msg.confirmDeleteHint")}
-        confirmLabel={t("action.reset")}
-        pending={pending}
-      />
     </>
   );
 }

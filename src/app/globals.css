@@ -278,13 +278,6 @@
     unicode-bidi: plaintext;
     display: inline-block;
     /*
-     * If a layout ever stretches a figure to its container's width (a flex
-     * column item, say), align it to the *parent's* reading edge. Plain
-     * `start` would resolve against the figure's own LTR direction and push
-     * every number to the left edge of an Arabic card.
-     */
-    text-align: match-parent;
-    /*
      * A figure run is one token. Without this a document number breaks at its
      * hyphens (INV-/2026-/0079) and a money column loses its alignment, which
      * is the whole reason this class exists.

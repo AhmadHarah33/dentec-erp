@@ -61,6 +61,7 @@ const tr: Record<MessageKey, string> = {
   "action.transfer": "Transfer Et",
   "action.adjust": "Düzelt",
   "action.void": "Faturayı İptal Et",
+  "action.cancelOrder": "Siparişi iptal et",
   "action.selectAll": "Tümünü Seç",
 
   /* Generic labels ------------------------------------------------ */
@@ -383,6 +384,19 @@ const tr: Record<MessageKey, string> = {
     "Bu sürümde giriş ekranı yoktur. Buradaki yetkiler yalnızca organizasyoneldir ve erişimi engellemez — bağlantıyı harici bir koruma katmanıyla koruyun.",
 
   /* Empty states -------------------------------------------------- */
+  "setup.title": "Buradan başlayın",
+  "setup.subtitle": "Sistemi kullanıma hazırlayan dört adım. Tamamlanınca bu liste kaybolur.",
+  "setup.company": "Şirket bilgilerini tamamlayın",
+  "setup.companyHint": "Adres, vergi numarası ve para birimleri — her basılı faturada görünür.",
+  "setup.items": "Ürün ve yedek parçaları ekleyin",
+  "setup.itemsHint": "Sattığınız cihazlar ve stokladığınız parçalar, fiyat ve maliyetleriyle.",
+  "setup.stock": "Açılış stoğunu girin",
+  "setup.stockHint": "Şu an her depoda bulunan miktarlar: Envanter ← Düzeltme.",
+  "setup.parties": "Müşteri ve tedarikçileri ekleyin",
+  "setup.partiesHint": "Satış yaptığınız klinikler ve alım yaptığınız firmalar.",
+  "setup.noCustomers": "Henüz müşteri yok.",
+  "setup.noSuppliers": "Henüz tedarikçi yok.",
+  "setup.addOne": "Ekle",
   "state.errorTitle": "Bu sayfa görüntülenemedi",
   "state.errorHint": "Beklenmeyen bir hata oluştu. Kaydedilmiş veriler kaybolmadı — tekrar deneyin; hata sürerse sistem yöneticisine bildirin.",
   "state.retry": "Tekrar dene",
@@ -418,6 +432,7 @@ const tr: Record<MessageKey, string> = {
   "msg.confirmIssue": "Faturayı onaylamak stoktan miktarları düşecektir.",
   "msg.confirmReceive": "Teslim alma, miktarları seçilen depoya ekleyecektir.",
   "msg.confirmVoid": "İptal, miktarları stoğa geri ekleyecektir.",
+  "msg.confirmCancelOrder": "Sipariş iptal edilecek ve artık teslim alınamayacak. Stoğa hiçbir miktar eklenmedi.",
   "msg.insufficientStock": "Seçilen depoda yeterli stok yok",
   "msg.requiredField": "Bu alan zorunludur",
   "msg.searchPlaceholder": "Ara…",

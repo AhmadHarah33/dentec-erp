@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { create, remove, resetDb, saveSettings, snapshot, update } from "@/lib/data/repository";
+import { create, remove, saveSettings, snapshot, update } from "@/lib/data/repository";
 import type { Settings, User } from "@/lib/data/types";
 import { fail, ok, type Result } from "./shared";
 
@@ -42,13 +42,6 @@ export async function updateSettings(patch: Partial<Settings>): Promise<Result> 
   }
   await saveSettings(patch);
   // Currency, tax rate and company details appear on nearly every screen.
-  revalidatePath("/", "layout");
-  return ok(undefined);
-}
-
-/** Throw the data away and lay the demo set down again. */
-export async function resetDemoData(): Promise<Result> {
-  await resetDb();
   revalidatePath("/", "layout");
   return ok(undefined);
 }

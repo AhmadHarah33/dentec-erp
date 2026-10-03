@@ -43,8 +43,14 @@ npx tsc --noEmit       # must be silent before you call anything done
 
 - **Stock is an append-only ledger.** `stockMoves` is never mutated or deleted;
   on-hand is always derived by summing it. Corrections are opposing moves.
-- **All storage goes through `src/lib/data/repository.ts`.** Never touch the
-  filesystem from a page or action.
+- **All storage goes through `src/lib/data/repository.ts`.** Never query
+  Postgres from a page or action. The store (`store.ts`) is Postgres in the
+  private `erp` schema; `schema-map.ts` maps every field of `types.ts` to a
+  column — **a new field must be added there and in a migration**, or it is
+  silently not stored. Schema changes are new files in `supabase/migrations/`,
+  never edits to applied ones.
+- **The stock ledger is append-only in the database too**: a trigger rejects
+  UPDATE/DELETE on `erp.stock_moves`. A mutation that edits a move fails.
 - **Store state lives on `globalThis`** (`src/lib/data/store.ts`). Next bundles
   server components and server actions separately, so a module-level `let`
   gives you two caches and stale renders. Do not "simplify" this back.

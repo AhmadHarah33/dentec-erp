@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type {
@@ -226,6 +227,17 @@ export function DocumentEditor({
                   </option>
                 ))}
               </Select>
+              {parties.length === 0 && (
+                <p className="text-2xs text-warn leading-snug">
+                  {t(isSales ? "setup.noCustomers" : "setup.noSuppliers")}{" "}
+                  <Link
+                    href={isSales ? "/customers" : "/suppliers"}
+                    className="font-semibold text-accent underline underline-offset-2"
+                  >
+                    {t("setup.addOne")}
+                  </Link>
+                </p>
+              )}
             </Field>
             <Field label={t("label.warehouse")}>
               <Select
