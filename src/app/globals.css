@@ -49,14 +49,6 @@
   --shadow-card: 0 1px 2px rgba(19, 24, 41, 0.04), 0 1px 3px rgba(19, 24, 41, 0.05);
   --shadow-pop: 0 4px 14px rgba(19, 24, 41, 0.09), 0 1px 3px rgba(19, 24, 41, 0.06);
   --shadow-modal: 0 18px 48px rgba(19, 24, 41, 0.2);
-  /*
-   * The dashboard's cards trade the hairline for a "shadow as border": a
-   * crisp 1px ring plus a soft ambient fall, so the edge stays sharp at any
-   * zoom level instead of aliasing the way a 1px border can. Still just an
-   * elevation step, not a third one — same faintness budget as shadow-card.
-   */
-  --shadow-ring: 0 0 0 1px rgba(19, 24, 41, 0.07), 0 1px 2px rgba(19, 24, 41, 0.04),
-    0 2px 8px rgba(19, 24, 41, 0.05);
 
   --font-sans: var(--font-cairo), system-ui, sans-serif;
 
@@ -76,6 +68,11 @@
   --text-base--line-height: 1.625rem;
   --text-lg: 1.5rem;
   --text-lg--line-height: 2rem;
+  /* KPI figures: the one number a tile exists to show. text-xl below sm. */
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl: 1.625rem;
+  --text-2xl--line-height: 2rem;
 
   /*
    * Motion. Two durations and one curve, so nothing in the app moves at a
@@ -271,8 +268,22 @@
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum";
     direction: ltr;
-    unicode-bidi: isolate;
+    /*
+     * Isolated, with the direction taken from the first strong character.
+     * Figures, document numbers and SKUs have no RTL letter before their
+     * first Latin or digit run, so they lay out left-to-right exactly as
+     * before; a compact Arabic amount ("34.5 ألف $") is led by an RLM from
+     * formatMoneyCompact and reads right-to-left as a phrase should.
+     */
+    unicode-bidi: plaintext;
     display: inline-block;
+    /*
+     * If a layout ever stretches a figure to its container's width (a flex
+     * column item, say), align it to the *parent's* reading edge. Plain
+     * `start` would resolve against the figure's own LTR direction and push
+     * every number to the left edge of an Arabic card.
+     */
+    text-align: match-parent;
     /*
      * A figure run is one token. Without this a document number breaks at its
      * hyphens (INV-/2026-/0079) and a money column loses its alignment, which
@@ -300,6 +311,24 @@
   select,
   textarea {
     width: 100%;
+  }
+  /*
+   * Identifiers — phone numbers, emails, SKUs, tax IDs, serials — are Latin
+   * strings whose characters must stay in order: "+90 553 636 2468" typed
+   * into an RTL field otherwise reorders to "2468 636 553 90+". They are
+   * laid out LTR but still aligned with the form's reading edge, so the
+   * column of fields in an Arabic form keeps one ragged side.
+   */
+  input[type="tel"],
+  input[type="email"],
+  input[type="url"] {
+    direction: ltr;
+  }
+  [dir="rtl"] input[type="tel"],
+  [dir="rtl"] input[type="email"],
+  [dir="rtl"] input[type="url"],
+  [dir="rtl"] input[dir="ltr"]:not([type="number"]) {
+    text-align: right;
   }
   input:focus-visible,
   select:focus-visible,

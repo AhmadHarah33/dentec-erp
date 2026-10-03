@@ -72,12 +72,37 @@ export function formatDate(date: ISODate | null | undefined, locale = "ar"): str
   );
 }
 
+/** "السبت، 3 أكتوبر 2026" — for a page subtitle, never a table cell. */
+export function formatDateLong(date: ISODate, locale = "ar"): string {
+  return stripBidi(
+    new Intl.DateTimeFormat(`${locale}-u-ca-gregory-nu-latn`, {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }).format(new Date(date + "T00:00:00")),
+  );
+}
+
 export function formatMonth(date: ISODate, locale = "ar"): string {
   return stripBidi(
     new Intl.DateTimeFormat(`${locale}-u-ca-gregory-nu-latn`, {
       month: "short",
       year: "2-digit",
     }).format(new Date(date + "T00:00:00")),
+  );
+}
+
+/**
+ * A month name alone, for a chart axis where the year is already obvious
+ * from position. Arabic has no short month forms, so this is the full name;
+ * the axis thins its ticks to make room.
+ */
+export function formatMonthTick(date: ISODate, locale = "ar"): string {
+  return stripBidi(
+    new Intl.DateTimeFormat(`${locale}-u-ca-gregory-nu-latn`, { month: "short" }).format(
+      new Date(date + "T00:00:00"),
+    ),
   );
 }
 

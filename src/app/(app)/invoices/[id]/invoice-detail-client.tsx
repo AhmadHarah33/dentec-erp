@@ -36,6 +36,7 @@ import { Modal, Confirm } from "@/components/ui/modal";
 import { IconPrint } from "@/components/ui/icons";
 import { DownloadPdfButton } from "@/components/app/download-pdf";
 import { InvoiceBilling } from "@/components/app/invoice-billing";
+import { DateInput } from "@/components/ui/date-input";
 
 interface LineItem {
   id: string;
@@ -197,12 +198,12 @@ export function InvoiceDetailClient({
           )}
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-4 print:block">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 print:block">
           <div className="lg:col-span-2 min-w-0 flex flex-col gap-4">
             <Card className="print:border-0">
               <div className="print:hidden">
                 <CardHeader
-                  title={t("label.description")}
+                  title={t("label.lines")}
                   meta={t("msg.rowsCount", { n: invoice.lines.length })}
                   action={
                     isDraft ? (
@@ -248,7 +249,7 @@ export function InvoiceDetailClient({
                           <td className="h-11 px-3">
                             {meta?.name ?? line.description}
                             {meta?.sku && (
-                              <Num className="text-2xs text-faint ms-2">{meta.sku}</Num>
+                              <span className="ms-2"><Num className="text-2xs text-faint">{meta.sku}</Num></span>
                             )}
                           </td>
                           <td className="h-11 px-3 text-end">
@@ -345,7 +346,7 @@ export function InvoiceDetailClient({
             <InvoiceBilling invoice={invoice} customer={customer} />
 
             <Card>
-              <CardHeader title={t("label.description")} />
+              <CardHeader title={t("label.details")} />
               <div className="px-3 py-1 divide-y divide-line">
                 <DetailRow label={t("label.customer")}>
                   {customer ? (
@@ -395,7 +396,7 @@ export function InvoiceDetailClient({
                         <td className="h-10 px-3">
                           {t(`method.${p.method}` as MessageKey)}
                           {p.reference && (
-                            <Num className="text-2xs text-faint ms-2">{p.reference}</Num>
+                            <span className="ms-2"><Num className="text-2xs text-faint">{p.reference}</Num></span>
                           )}
                         </td>
                         <td className="h-10 px-3 text-end">
@@ -461,13 +462,11 @@ export function InvoiceDetailClient({
           </>
         }
       >
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label={t("label.date")}>
-            <Input
-              type="date"
-              dir="ltr"
+            <DateInput
               value={payForm.date}
-              onChange={(e) => setPayForm({ ...payForm, date: e.target.value })}
+              onChange={(v) => setPayForm({ ...payForm, date: v })}
             />
           </Field>
           <Field

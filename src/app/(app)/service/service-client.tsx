@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/primitives";
 import { Modal } from "@/components/ui/modal";
 import { ServiceBoard } from "@/components/app/service-board";
+import { DateInput } from "@/components/ui/date-input";
+import { useToast } from "@/components/ui/toast";
 
 /**
  * The workshop, shaped like the workshop.
@@ -46,6 +48,7 @@ export function ServiceClient({
   locale: string;
 }) {
   const t = useT();
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [query, setQuery] = useState("");
   const [technicianFilter, setTechnicianFilter] = useState("");
@@ -112,6 +115,7 @@ export function ServiceClient({
       });
 
       if (result.ok) {
+        toast(t("msg.saved"));
         setNewJobOpen(false);
         setNewJobForm({
           customerId: "",
@@ -248,7 +252,7 @@ export function ServiceClient({
           </>
         }
       >
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label={t("label.customer")} required className="sm:col-span-2">
             <Select
               value={newJobForm.customerId}
@@ -287,17 +291,16 @@ export function ServiceClient({
 
           <Field label={t("label.serialNo")}>
             <Input
+              dir="ltr"
               value={newJobForm.serialNo}
               onChange={(e) => setNewJobForm({ ...newJobForm, serialNo: e.target.value })}
             />
           </Field>
 
           <Field label={t("label.date")}>
-            <Input
-              type="date"
+            <DateInput
               value={newJobForm.date}
-              onChange={(e) => setNewJobForm({ ...newJobForm, date: e.target.value })}
-              dir="ltr"
+              onChange={(v) => setNewJobForm({ ...newJobForm, date: v })}
             />
           </Field>
 

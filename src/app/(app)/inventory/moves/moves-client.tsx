@@ -12,6 +12,7 @@ import { Badge, Input, Num, Select } from "@/components/ui/primitives";
 import { DataTable, type Column } from "@/components/ui/table";
 import { PageTabs } from "@/components/ui/tabs";
 import { STOCK_TABS } from "@/lib/tabs";
+import { DateInput } from "@/components/ui/date-input";
 
 /** Where a move came from, as a link back to the document that caused it. */
 function refHref(move: StockMove): string | null {
@@ -86,7 +87,7 @@ export function MovesClient({
         return (
           <span>
             {localName(item, locale)}
-            <Num className="text-2xs text-faint ms-2">{item?.sku}</Num>
+            <span className="ms-2"><Num className="text-2xs text-faint">{item?.sku}</Num></span>
           </span>
         );
       },
@@ -194,21 +195,19 @@ export function MovesClient({
                 </option>
               ))}
             </Select>
-            <Input
-              type="date"
+            <DateInput
               value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="w-36"
-              dir="ltr"
-              aria-label={t("label.date")}
+              onChange={(v) => setFrom(v)}
+              className="w-40"
+              placeholder={t("label.fromDate")}
+              clearable
             />
-            <Input
-              type="date"
+            <DateInput
               value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="w-36"
-              dir="ltr"
-              aria-label={t("label.dueDate")}
+              onChange={(v) => setTo(v)}
+              className="w-40"
+              placeholder={t("label.toDate")}
+              clearable
             />
           </>
         }

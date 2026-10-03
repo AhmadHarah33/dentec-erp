@@ -32,6 +32,7 @@ import { Modal, Confirm } from "@/components/ui/modal";
 import { Drawer, DrawerSection } from "@/components/ui/drawer";
 import { DetailRow } from "@/components/ui/page";
 import { IconPlus, IconSearch, IconTag } from "@/components/ui/icons";
+import { useToast } from "@/components/ui/toast";
 
 interface Props {
   itemType: ItemType;
@@ -89,6 +90,7 @@ export function ItemsClient({
   locale,
 }: Props) {
   const t = useT();
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
@@ -188,7 +190,10 @@ export function ItemsClient({
     setError(null);
     startTransition(async () => {
       const result = await saveItem(editing?.id ?? null, form);
-      if (result.ok) setOpen(false);
+      if (result.ok) {
+        setOpen(false);
+        toast(t("msg.saved"));
+      }
       else setError(t(result.errorKey as MessageKey) + (result.detail ? ` — ${result.detail}` : ""));
     });
   }
@@ -197,7 +202,10 @@ export function ItemsClient({
     if (!confirming) return;
     startTransition(async () => {
       const result = await deleteItem(confirming.id);
-      if (result.ok) setConfirming(null);
+      if (result.ok) {
+        setConfirming(null);
+        toast(t("msg.deleted"));
+      }
       else setError(t(result.errorKey as MessageKey));
     });
   }
@@ -229,7 +237,10 @@ export function ItemsClient({
         appliesTo: categoryForm.appliesTo,
         sortOrder: categories.length,
       });
-      if (result.ok) setAddingCategory(false);
+      if (result.ok) {
+        setAddingCategory(false);
+        toast(t("msg.saved"));
+      }
       else
         setCategoryError(
           t(result.errorKey as MessageKey) + (result.detail ? ` — ${result.detail}` : ""),
@@ -476,13 +487,12 @@ export function ItemsClient({
           </>
         }
       >
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label={t("label.sku")} required>
             <Input
+              dir="ltr"
               value={form.sku}
               onChange={(e) => setForm({ ...form, sku: e.target.value })}
-              dir="ltr"
-              className="text-start"
             />
           </Field>
           <Field label={t("label.barcode")}>
@@ -490,7 +500,6 @@ export function ItemsClient({
               value={form.barcode}
               onChange={(e) => setForm({ ...form, barcode: e.target.value })}
               dir="ltr"
-              className="text-start"
             />
           </Field>
           <Field label={t("label.nameAr")} required>
@@ -504,7 +513,6 @@ export function ItemsClient({
               value={form.nameTr}
               onChange={(e) => setForm({ ...form, nameTr: e.target.value })}
               dir="ltr"
-              className="text-start"
             />
           </Field>
           <Field label={t("label.category")}>
@@ -537,7 +545,6 @@ export function ItemsClient({
               value={form.brand}
               onChange={(e) => setForm({ ...form, brand: e.target.value })}
               dir="ltr"
-              className="text-start"
             />
           </Field>
           <Field label={t("label.model")}>
@@ -545,7 +552,6 @@ export function ItemsClient({
               value={form.model}
               onChange={(e) => setForm({ ...form, model: e.target.value })}
               dir="ltr"
-              className="text-start"
             />
           </Field>
 
@@ -611,7 +617,7 @@ export function ItemsClient({
                       className="accent-[var(--color-accent)]"
                     />
                     <span className="truncate">{localName(m, locale)}</span>
-                    <Num className="text-2xs text-faint ms-auto">{m.sku}</Num>
+                    <span className="ms-auto"><Num className="text-2xs text-faint">{m.sku}</Num></span>
                   </label>
                 ))}
               </div>
@@ -668,7 +674,6 @@ export function ItemsClient({
               value={categoryForm.nameTr}
               onChange={(e) => setCategoryForm({ ...categoryForm, nameTr: e.target.value })}
               dir="ltr"
-              className="text-start"
             />
           </Field>
           <Field label={t("page.categories.scope")}>

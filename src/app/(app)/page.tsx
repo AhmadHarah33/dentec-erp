@@ -17,8 +17,9 @@ import {
 import { formatMoney, formatMoneyCompact, formatNumber } from "@/lib/money";
 import {
   daysOverdue,
-  formatDate,
+  formatDateLong,
   formatMonth,
+  formatMonthTick,
   isInMonth,
   lastMonths,
   today,
@@ -106,8 +107,11 @@ export default async function DashboardPage({
   const live = db.salesInvoices.filter(isLive);
   const monthInvoices = live.filter((i) => isInMonth(i.date, thisMonth));
   const monthSales = monthInvoices.reduce((s, i) => s + invoiceTotalBase(i), 0);
+  // Month-to-date against the same days of last month. Comparing a month
+  // three days old against a whole one reads as a collapse every morning.
+  const dayOfMonth = Number(now.slice(8, 10));
   const prevSales = live
-    .filter((i) => isInMonth(i.date, prevMonth))
+    .filter((i) => isInMonth(i.date, prevMonth) && Number(i.date.slice(8, 10)) <= dayOfMonth)
     .reduce((s, i) => s + invoiceTotalBase(i), 0);
   const delta = prevSales > 0 ? ((monthSales - prevSales) / prevSales) * 100 : undefined;
 
@@ -263,6 +267,7 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
           key={inv.id}
           href={"/invoices/" + inv.id}
           title={customerName(inv.customerId)}
+          subtitle={inv.number + " · " + t("dash.daysLate", counted("day", daysOverdue(inv.dueDate)))}
           value={money(invoiceOutstanding(inv, db.payments))}
           valueTone="danger"
         />
@@ -284,6 +289,7 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
           key={row.item.id}
           href="/inventory"
           title={itemName(row.item)}
+          subtitle={row.item.sku}
           value={count(row.qty)}
           valueTone={row.health === "out" ? "danger" : "warn"}
         />
@@ -355,9 +361,8 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
   return (
     <>
       <PageHeader
-        size="hero"
-        title={t("dash.greeting")}
-        subtitle={formatDate(now, locale)}
+        title={t("dash.title")}
+        subtitle={formatDateLong(now, locale)}
         actions={
           <>
             {role === "service" ? (
@@ -386,7 +391,7 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
         }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8 stagger">{tiles}</div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">{tiles}</div>
 
       <h2 className="text-sm font-semibold mb-4">{t("dash.needsAttention")}</h2>
 
@@ -395,33 +400,44 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
           <EmptyState title={t("dash.allClear")} hint={t("dash.allClearHint")} />
         </Card>
       ) : (
-        <div className={"grid gap-4 mb-8 stagger " + listCols}>{lists.map((l) => l.node)}</div>
+        <div className={"grid grid-cols-1 gap-4 mb-8 " + listCols}>{lists.map((l) => l.node)}</div>
       )}
 
       {showMoney ? (
         <>
           <h2 className="text-sm font-semibold mb-4">{t("dash.performance")}</h2>
 
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-4 stagger">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             <KpiTile
               label={t("dash.salesThisMonth")}
               value={compact(monthSales)}
-              delta={delta}
-              meta={t("dash.fromInvoices", counted("invoice", monthInvoices.length))}
+              delta={monthSales > 0 ? delta : undefined}
+              meta={
+                monthSales > 0 && delta !== undefined
+                  ? t("dash.vsSamePeriod")
+                  : t("dash.fromInvoices", counted("invoice", monthInvoices.length))
+              }
+              href="/invoices"
+            />
+            <KpiTile
+              label={t("dash.collectedThisMonth")}
+              value={compact(collected)}
+              href="/accounting"
             />
             <KpiTile
               label={t("dash.receivables")}
               value={compact(receivables)}
-              meta={t("dash.vsLastMonth")}
+              href="/accounting"
             />
             <KpiTile
               label={t("dash.stockValue")}
               value={compact(stockTotal)}
               meta={t("dash.atStandardCost")}
+              href="/inventory"
             />
           </div>
 
-          <div className="grid lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <DashCard
               className="lg:col-span-2"
               title={t("dash.salesTrend")}
@@ -447,6 +463,7 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
               <TrendBars
                 points={trend.map((p) => ({
                   label: formatMonth(p.month, locale),
+                  tick: formatMonthTick(p.month, locale),
                   value: p.sales,
                   meta: t("dash.fromInvoices", counted("invoice", p.count)),
                   highlight: p.month === thisMonth || (p.sales === peakSales && p.sales > 0),
@@ -476,7 +493,7 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
         /* Service gets the stock picture where the money picture would be. */
         <>
           <h2 className="text-sm font-semibold mb-4">{t("dash.performance")}</h2>
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 stagger">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <KpiTile
               label={t("dash.stockValue")}
               value={compact(stockTotal)}

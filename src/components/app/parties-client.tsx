@@ -36,6 +36,7 @@ import { Modal } from "@/components/ui/modal";
 import { Drawer, DrawerSection } from "@/components/ui/drawer";
 import { DetailRow } from "@/components/ui/page";
 import { IconPlus } from "@/components/ui/icons";
+import { useToast } from "@/components/ui/toast";
 
 export interface PartyRow {
   party: Party;
@@ -80,6 +81,7 @@ export function PartiesClient({
   locale: string;
 }) {
   const t = useT();
+  const toast = useToast();
   // Only customers are billed, so only customers carry a billing regime.
   const isCustomer = which === "customers";
   const [pending, startTransition] = useTransition();
@@ -158,7 +160,10 @@ export function PartiesClient({
 
     startTransition(async () => {
       const result = await saveParty(which, editing?.id ?? null, form);
-      if (result.ok) setOpen(false);
+      if (result.ok) {
+        setOpen(false);
+        toast(t("msg.saved"));
+      }
       else setError(t(result.errorKey as MessageKey));
     });
   }
@@ -311,7 +316,7 @@ export function PartiesClient({
           </>
         }
       >
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label={t("label.name")} required className="sm:col-span-2">
             <Input
               value={form.name}
@@ -324,7 +329,6 @@ export function PartiesClient({
               value={form.code}
               onChange={(e) => setForm({ ...form, code: e.target.value })}
               dir="ltr"
-              className="text-start"
             />
           </Field>
           <Field label={t("label.type")}>
@@ -347,10 +351,10 @@ export function PartiesClient({
           </Field>
           <Field label={t("label.phone")}>
             <Input
+              type="tel"
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
               dir="ltr"
-              className="text-start"
             />
           </Field>
           <Field label={t("label.email")}>
@@ -359,7 +363,6 @@ export function PartiesClient({
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               dir="ltr"
-              className="text-start"
             />
           </Field>
           <Field label={t("label.city")}>
@@ -379,7 +382,6 @@ export function PartiesClient({
               value={form.taxNumber}
               onChange={(e) => setForm({ ...form, taxNumber: e.target.value })}
               dir="ltr"
-              className="text-start"
             />
           </Field>
           <Field label={`${t("label.creditLimit")} (${currency})`} hint={t("label.optional")}>
@@ -430,6 +432,7 @@ export function PartiesClient({
                   </Field>
                   <Field label={t("billing.taxId")}>
                     <Input
+                      dir="ltr"
                       value={form.turkey.taxId}
                       inputMode="numeric"
                       maxLength={form.turkey.taxIdKind === "tckn" ? 11 : 10}

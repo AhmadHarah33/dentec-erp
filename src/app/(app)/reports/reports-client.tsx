@@ -21,6 +21,7 @@ import { IconCart } from "@/components/ui/icons";
 import type { MessageKey } from "@/lib/i18n";
 import { countedPhrase } from "@/lib/plural";
 import type { Locale } from "@/lib/i18n";
+import { DateInput } from "@/components/ui/date-input";
 
 interface ReportsClientProps {
   invoices: SalesInvoice[];
@@ -207,22 +208,18 @@ export function ReportsClient({
           ]}
         />
         <div className="flex items-center gap-2 ms-auto">
-          <Input
-            type="date"
+          <DateInput
             value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            dir="ltr"
-            aria-label={t("label.date")}
-            className="w-36"
+            onChange={(v) => setFromDate(v)}
+            placeholder={t("label.fromDate")}
+            className="w-40"
           />
           <span className="text-faint text-2xs shrink-0">–</span>
-          <Input
-            type="date"
+          <DateInput
             value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            dir="ltr"
-            aria-label={t("label.dueDate")}
-            className="w-36"
+            onChange={(v) => setToDate(v)}
+            placeholder={t("label.toDate")}
+            className="w-40"
           />
         </div>
       </Toolbar>
@@ -296,9 +293,7 @@ export function ReportsClient({
                         {row.item ? localName(row.item, locale) : "—"}
                       </td>
                       <td className="px-3 text-muted">
-                        <span className="text-2xs">
-                          {row.item?.sku ?? "—"}
-                        </span>
+                        <Num className="text-2xs">{row.item?.sku ?? "—"}</Num>
                       </td>
                       <td className="px-3 text-end">
                         <Num>{fmt(row.units, 0)}</Num>
@@ -474,7 +469,7 @@ export function ReportsClient({
                     >
                       <td className="px-3">{localName(row.item, locale)}</td>
                       <td className="px-3 text-muted">
-                        <span className="text-2xs">{row.item.sku}</span>
+                        <Num className="text-2xs">{row.item.sku}</Num>
                       </td>
                       <td className="px-3 text-end">
                         <Num>{fmt(row.qty, 0)}</Num>
@@ -548,7 +543,7 @@ export function ReportsClient({
                   >
                     <td className="px-3">{localName(row.item, locale)}</td>
                     <td className="px-3 text-muted">
-                      <span className="text-2xs">{row.item.sku}</span>
+                      <Num className="text-2xs">{row.item.sku}</Num>
                     </td>
                     <td className="px-3 text-end">
                       <Num>{fmt(row.qty, 0)}</Num>

@@ -19,7 +19,8 @@ npx tsc --noEmit       # must be silent before you call anything done
 ## Non-negotiables
 
 - **Every user-visible string goes through `t()`.** Keys live in
-  `src/lib/i18n/ar.ts`. Reuse existing keys; add new ones only to `ar.ts`.
+  `src/lib/i18n/ar.ts`. Reuse existing keys; a new key goes in `ar.ts` and
+  `tr.ts` (Turkish is typed complete, so a missing key fails the build).
 - **Every number renders inside `<Num>`** — tabular figures + LTR isolation, or
   digits misalign in RTL tables.
 - **Logical CSS only**: `ms-/me-`, `ps-/pe-`, `start-/end-`, `text-start/end`.
@@ -31,6 +32,8 @@ npx tsc --noEmit       # must be silent before you call anything done
   filled buttons, active nav, links, chart data.
 - **A status never picks its own colour.** Map it to a `Tone` in
   `src/lib/labels.ts` and let the `Badge` render it.
+- **Never use a bare `<input type="date">`** — use `DateInput`; the native
+  one paints in the OS locale (`mm/dd/yyyy` on English Windows).
 - **Do not hardcode type sizes.** The scale lives in the `@theme` block of
   `globals.css`; `text-xs` is 14px body, `text-2xs` is 13px meta.
 - **Never pass a function from a server page to a client component.** Pass

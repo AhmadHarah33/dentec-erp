@@ -12,6 +12,7 @@ import { DetailRow, EmptyState } from "@/components/ui/page";
 import { Badge, Card, CardHeader, Num, LinkButton, Button } from "@/components/ui/primitives";
 import { Confirm } from "@/components/ui/modal";
 import { DownloadPdfButton } from "@/components/app/download-pdf";
+import { useToast } from "@/components/ui/toast";
 
 export function PurchaseDetailClient({
   order,
@@ -32,6 +33,7 @@ export function PurchaseDetailClient({
   locale: string;
 }) {
   const t = useT();
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -53,6 +55,7 @@ export function PurchaseDetailClient({
     startTransition(async () => {
       const result = await receiveOrder(order.id, receiveDate);
       if (result.ok) {
+        toast(t("msg.received"));
         setReceiveOpen(false);
       }
     });
@@ -62,6 +65,7 @@ export function PurchaseDetailClient({
     startTransition(async () => {
       const result = await cancelOrder(order.id);
       if (result.ok) {
+        toast(t("msg.cancelled"));
         setCancelOpen(false);
       }
     });
@@ -171,7 +175,7 @@ export function PurchaseDetailClient({
                       <td className="h-11 px-3">
                         <span>
                           {item ? localName(item, locale) : "—"}
-                          {item && <Num className="text-2xs text-faint ms-2">{item.sku}</Num>}
+                          {item && <span className="ms-2"><Num className="text-2xs text-faint">{item.sku}</Num></span>}
                         </span>
                       </td>
                       <td className="h-11 px-3 text-muted text-2xs">{line.description || "—"}</td>

@@ -160,26 +160,72 @@ const CURRENCY_DECIMALS: Partial<Record<CurrencyCode, number>> = {
  * Arabic-Indic digits into that breaks the alignment users rely on when
  * scanning a price list.
  */
+/**
+ * The symbol printed for each currency. Intl's own choice is inconsistent
+ * across locales and runtimes — Arabic gets "US$", and Node's ICU prints the
+ * Syrian pound as a bare "£" — so the app decides once, here.
+ */
+const CURRENCY_SYMBOL: Record<CurrencyCode, string> = {
+  USD: "$",
+  EUR: "€",
+  TRY: "₺",
+  SAR: "ر.س",
+  AED: "د.إ",
+  SYP: "ل.س",
+};
+
+/** Bidi control marks Intl injects; `.num` already isolates the run. */
+const BIDI_MARKS = /[\u200e\u200f\u061c]/g;
+const ARABIC_LETTER = /[\u0600-\u06ff]/;
+const RLM = "\u200f";
+
+/**
+ * Formats with Intl for grouping, decimals and symbol placement, then swaps
+ * Intl's currency token for ours. Placement stays the locale's: Arabic puts
+ * the symbol after the figure, Turkish before it.
+ */
+function withSymbol(
+  amount: number,
+  currency: CurrencyCode,
+  locale: string,
+  options: Intl.NumberFormatOptions,
+): string {
+  return new Intl.NumberFormat(`${locale}-u-nu-latn`, {
+    style: "currency",
+    currency,
+    ...options,
+  })
+    .formatToParts(amount)
+    .map((part) => (part.type === "currency" ? CURRENCY_SYMBOL[currency] ?? part.value : part.value))
+    .join("")
+    .replace(BIDI_MARKS, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function formatMoney(
   amount: number,
   currency: CurrencyCode,
   locale = "ar",
 ): string {
   const decimals = CURRENCY_DECIMALS[currency] ?? 2;
-  return new Intl.NumberFormat(`${locale}-u-nu-latn`, {
-    style: "currency",
-    currency,
+  return withSymbol(amount || 0, currency, locale, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
-  }).format(amount || 0);
+  });
 }
 
 /**
- * Money for a KPI tile: 556,833.00 US$ becomes 556.8K US$.
+ * Money for a KPI tile: 556,833.00 $ becomes 556.8 ألف $ (556,8 B ₺ in
+ * Turkish).
  *
  * Only for figures that are being scanned, never for figures that are being
  * checked — tables, documents and reports always use `formatMoney`, because a
  * rounded total on an invoice is a wrong total.
+ *
+ * The Arabic form contains a word, so it must render right-to-left; `.num`
+ * uses `unicode-bidi: plaintext`, which takes the direction from the first
+ * strong character — the leading RLM kept here for exactly that reason.
  */
 export function formatMoneyCompact(
   amount: number,
@@ -190,12 +236,11 @@ export function formatMoneyCompact(
   // Below 10,000 the full figure is short enough to read, and compacting it
   // loses precision for no gain in width.
   if (Math.abs(n) < 10_000) return formatMoney(n, currency, locale);
-  return new Intl.NumberFormat(`${locale}-u-nu-latn`, {
-    style: "currency",
-    currency,
+  const text = withSymbol(n, currency, locale, {
     notation: "compact",
     maximumFractionDigits: 1,
-  }).format(n);
+  });
+  return ARABIC_LETTER.test(text) ? RLM + text : text;
 }
 
 /** A bare compact figure — for chart axis ticks, where the currency is implied. */

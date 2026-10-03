@@ -89,7 +89,7 @@ export default async function CustomerPage({
         />
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-1 h-fit">
           <CardHeader title={t("label.company")} />
           <div className="px-3 py-1 divide-y divide-line">
@@ -218,7 +218,7 @@ export default async function CustomerPage({
                       <td className="h-10 px-3">
                         {t(`method.${p.method}` as MessageKey)}
                         {p.reference && (
-                          <Num className="text-2xs text-faint ms-2">{p.reference}</Num>
+                          <span className="ms-2"><Num className="text-2xs text-faint">{p.reference}</Num></span>
                         )}
                       </td>
                       <td className="h-10 px-3 text-end w-32">

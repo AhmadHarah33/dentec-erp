@@ -33,6 +33,7 @@ import {
 import { DetailRow } from "@/components/ui/page";
 import { Modal } from "@/components/ui/modal";
 import { IconAlert } from "@/components/ui/icons";
+import { useToast } from "@/components/ui/toast";
 
 const BLANK_DISPATCH: DispatchInfo = {
   vehiclePlate: "",
@@ -61,6 +62,7 @@ export function InvoiceBilling({
   customer: Customer | null;
 }) {
   const { t } = useLocale();
+  const toast = useToast();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -83,7 +85,10 @@ export function InvoiceBilling({
         documentType: form.documentType,
         dispatch: needsDispatch(form.documentType) ? form.dispatch : undefined,
       });
-      if (result.ok) setOpen(false);
+      if (result.ok) {
+        setOpen(false);
+        toast(t("msg.saved"));
+      }
       else setError(t(result.errorKey as MessageKey));
     });
   }
@@ -163,7 +168,7 @@ export function InvoiceBilling({
           </>
         }
       >
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label={t("billing.region")}>
             <Select
               value={form.billingRegion}

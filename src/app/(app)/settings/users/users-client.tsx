@@ -20,6 +20,7 @@ import { Modal, Confirm } from "@/components/ui/modal";
 import { PageTabs } from "@/components/ui/tabs";
 import { SETTINGS_TABS } from "@/lib/tabs";
 import { IconPlus, IconTrash, IconAlert } from "@/components/ui/icons";
+import { useToast } from "@/components/ui/toast";
 
 interface UserRow {
   user: User;
@@ -42,6 +43,7 @@ export function UsersClient({
   rows: UserRow[];
 }) {
   const t = useT();
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
@@ -75,7 +77,10 @@ export function UsersClient({
     setError(null);
     startTransition(async () => {
       const result = await saveUser(editing?.id ?? null, form);
-      if (result.ok) setOpen(false);
+      if (result.ok) {
+        setOpen(false);
+        toast(t("msg.saved"));
+      }
       else setError(t(result.errorKey as MessageKey));
     });
   }
@@ -85,6 +90,7 @@ export function UsersClient({
     startTransition(async () => {
       const result = await deleteUser(confirming.id);
       if (result.ok) {
+        toast(t("msg.deleted"));
         setConfirming(null);
         setOpen(false);
       } else {
@@ -240,7 +246,7 @@ export function UsersClient({
           </div>
         }
       >
-        <div className="grid sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label={t("label.name")} required className="sm:col-span-2">
             <Input
               value={form.name}
@@ -257,6 +263,7 @@ export function UsersClient({
           </Field>
           <Field label={t("label.phone")}>
             <Input
+              type="tel"
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
             />

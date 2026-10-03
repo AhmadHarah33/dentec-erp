@@ -37,6 +37,8 @@ import { DataTable, type Column } from "@/components/ui/table";
 import { Modal, Confirm } from "@/components/ui/modal";
 import { StackBar } from "@/components/ui/charts";
 import { paymentBase, expenseBase } from "@/lib/queries";
+import { DateInput } from "@/components/ui/date-input";
+import { useToast } from "@/components/ui/toast";
 
 interface PaymentForm {
   date: string;
@@ -83,6 +85,7 @@ export function AccountingClient({
   locale: string;
 }) {
   const t = useT();
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
 
   // Tab state
@@ -250,6 +253,7 @@ export function AccountingClient({
       });
 
       if (result.ok) {
+        toast(t("msg.saved"));
         setPaymentModalOpen(false);
       } else {
         setPaymentError(t(result.errorKey as MessageKey));
@@ -265,6 +269,7 @@ export function AccountingClient({
         deletePaymentConfirm.invoiceId,
       );
       if (result.ok) {
+        toast(t("msg.deleted"));
         setDeletePaymentConfirm(null);
       }
     });
@@ -323,6 +328,7 @@ export function AccountingClient({
       });
 
       if (result.ok) {
+        toast(t("msg.saved"));
         setExpenseModalOpen(false);
       } else {
         setExpenseError(t(result.errorKey as MessageKey));
@@ -335,6 +341,7 @@ export function AccountingClient({
     startTransition(async () => {
       const result = await deleteExpense(deleteExpenseConfirm.id);
       if (result.ok) {
+        toast(t("msg.deleted"));
         setDeleteExpenseConfirm(null);
       }
     });
@@ -648,21 +655,19 @@ export function AccountingClient({
                   </option>
                 ))}
               </Select>
-              <Input
-                type="date"
+              <DateInput
                 value={paymentFrom}
-                onChange={(e) => setPaymentFrom(e.target.value)}
-                placeholder={t("label.date")}
-                dir="ltr"
-                className="w-32"
+                placeholder={t("label.fromDate")}
+                onChange={(v) => setPaymentFrom(v)}
+                className="w-40"
+                clearable
               />
-              <Input
-                type="date"
+              <DateInput
                 value={paymentTo}
-                onChange={(e) => setPaymentTo(e.target.value)}
-                placeholder={t("label.date")}
-                dir="ltr"
-                className="w-32"
+                placeholder={t("label.toDate")}
+                onChange={(v) => setPaymentTo(v)}
+                className="w-40"
+                clearable
               />
             </>
           }
@@ -697,21 +702,19 @@ export function AccountingClient({
                   </option>
                 ))}
               </Select>
-              <Input
-                type="date"
+              <DateInput
                 value={expenseFrom}
-                onChange={(e) => setExpenseFrom(e.target.value)}
-                placeholder={t("label.date")}
-                dir="ltr"
-                className="w-32"
+                placeholder={t("label.fromDate")}
+                onChange={(v) => setExpenseFrom(v)}
+                className="w-40"
+                clearable
               />
-              <Input
-                type="date"
+              <DateInput
                 value={expenseTo}
-                onChange={(e) => setExpenseTo(e.target.value)}
-                placeholder={t("label.date")}
-                dir="ltr"
-                className="w-32"
+                placeholder={t("label.toDate")}
+                onChange={(v) => setExpenseTo(v)}
+                className="w-40"
+                clearable
               />
             </>
           }
@@ -828,13 +831,11 @@ export function AccountingClient({
             {paymentError}
           </div>
         )}
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label={t("label.date")} required>
-            <Input
-              type="date"
+            <DateInput
               value={paymentForm.date}
-              onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })}
-              dir="ltr"
+              onChange={(v) => setPaymentForm({ ...paymentForm, date: v })}
             />
           </Field>
           <Field label={t("label.type")} required>
@@ -978,13 +979,11 @@ export function AccountingClient({
             {expenseError}
           </div>
         )}
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label={t("label.date")} required>
-            <Input
-              type="date"
+            <DateInput
               value={expenseForm.date}
-              onChange={(e) => setExpenseForm({ ...expenseForm, date: e.target.value })}
-              dir="ltr"
+              onChange={(v) => setExpenseForm({ ...expenseForm, date: v })}
             />
           </Field>
           <Field label={t("label.category")} required>

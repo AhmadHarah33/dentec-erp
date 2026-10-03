@@ -34,6 +34,13 @@ export const IconSearch = (p: IconProps) => (
   </Icon>
 );
 
+export const IconCalendar = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="2.75" y="3.75" width="10.5" height="9.5" rx="1.5" />
+    <path d="M2.75 6.75h10.5M5.5 2.5v2.25M10.5 2.5v2.25" />
+  </Icon>
+);
+
 export const IconPlus = (p: IconProps) => (
   <Icon {...p}>
     <path d="M8 3.25v9.5M3.25 8h9.5" />
