@@ -271,6 +271,74 @@ async function main() {
     assert.equal(db.salesInvoices.filter((x) => x.number.startsWith("PAR-")).length, 10);
   });
 
+  await check("serial units, serial lines and received quantities survive a round trip", async () => {
+    await mutate((db) => {
+      db.items.push({
+        ...base("m9"), sku: "SER-1", nameAr: "جهاز", nameTr: "", itemType: "product", categoryId: null, unit: "piece",
+        cost: 1, price: 2, taxRate: 20, minStock: 0, brand: "", model: "", barcode: "", fitsItemIds: [], notes: "",
+        active: true, tracksSerial: true, warrantyMonths: 12,
+      });
+      db.salesInvoices.push({
+        ...invoice, id: "sn1", number: "SN-0001",
+        lines: [{ id: "snl", itemId: "m9", description: "", qty: 2, unitPrice: 2, discountPercent: 0, taxRate: 20, serials: ["A-1", "A-2"] }],
+      });
+      db.units.push({
+        ...base("un1"), itemId: "m9", serialNo: "A-1", customerId: null, invoiceId: "sn1", soldAt: "2026-10-04",
+        warrantyEnd: "2027-10-04", notes: "",
+      });
+      db.purchaseOrders.push({
+        ...base("po9"), number: "PO-9", date: "2026-10-04", expectedDate: "2026-10-10", supplierId: "su1", warehouseId: db.warehouses[0].id,
+        currency: "USD", fxRate: 1, status: "partial", discountKind: "percent", discountValue: 0,
+        lines: [{ id: "plrq", itemId: "m9", description: "", qty: 10, unitPrice: 1, discountPercent: 0, taxRate: 0, receivedQty: 4 }],
+        notes: "", receivedAt: null,
+      });
+    });
+    const db = await reread();
+    assert.deepEqual(db.salesInvoices.find((i) => i.id === "sn1")!.lines[0].serials, ["A-1", "A-2"]);
+    assert.equal(db.purchaseOrders.find((o) => o.id === "po9")!.lines[0].receivedQty, 4);
+    assert.equal(db.units.find((u) => u.id === "un1")!.warrantyEnd, "2027-10-04");
+    assert.equal(db.items.find((i) => i.id === "m9")!.tracksSerial, true);
+  });
+
+  await check("the same serial cannot be registered twice for one item, in any case", async () => {
+    await assert.rejects(
+      mutate((db) => {
+        db.units.push({ ...base("un2"), itemId: "m9", serialNo: "a-1", customerId: null, invoiceId: null, soldAt: null, warrantyEnd: null, notes: "" });
+      }),
+    );
+  });
+
+  await check("every change is written to the audit log, with only the changed fields on an update", async () => {
+    const sql = postgres(url, { max: 1 });
+    try {
+      await mutate((db) => {
+        db.suppliers.find((x) => x.id === "su1")!.phone = "0555";
+      });
+      const rows = await sql`
+        select action, before, after from erp.audit_log
+        where collection = 'suppliers' and record_id = 'su1' order by id desc limit 1`;
+      assert.equal(rows[0].action, "update");
+      assert.deepEqual(rows[0].after, { phone: "0555" });
+      // The ledger is not repeated in the log, but an invoice is.
+      const inserted = await sql`select count(*)::int as n from erp.audit_log where collection = 'salesInvoices' and action = 'insert'`;
+      assert.ok(inserted[0].n >= 1);
+      const ledger = await sql`select count(*)::int as n from erp.audit_log where collection = 'stockMoves'`;
+      assert.equal(ledger[0].n, 0);
+    } finally {
+      await sql.end();
+    }
+  });
+
+  await check("the audit log refuses an edit and a delete", async () => {
+    const sql = postgres(url, { max: 1 });
+    try {
+      await assert.rejects(sql`update erp.audit_log set label = 'x'`);
+      await assert.rejects(sql`delete from erp.audit_log`);
+    } finally {
+      await sql.end();
+    }
+  });
+
   await closeDb();
   console.log(`\n${passed} checks passed`);
 }

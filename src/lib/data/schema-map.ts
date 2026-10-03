@@ -24,6 +24,8 @@ export interface ChildSpec {
   /** Column pointing back at the parent. */
   parentKey: string;
   fields: string[];
+  /** As on TableSpec: a NULL column reads back as an absent key. */
+  optional?: string[];
 }
 
 export interface TableSpec {
@@ -159,6 +161,7 @@ export const SPECS: Record<CollectionName, TableSpec> = {
       table: "sales_invoice_lines",
       parentKey: "invoice_id",
       fields: [...DOC_LINE, "serials"],
+      optional: ["serials"],
     },
   },
   purchaseOrders: {
@@ -185,6 +188,7 @@ export const SPECS: Record<CollectionName, TableSpec> = {
       table: "purchase_order_lines",
       parentKey: "order_id",
       fields: [...DOC_LINE, "receivedQty"],
+      optional: ["receivedQty"],
     },
   },
   payments: {

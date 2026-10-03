@@ -10,7 +10,8 @@
     "check": "tsc --outDir .check-out --skipLibCheck --module commonjs --target es2022 --moduleResolution node --strict false --esModuleInterop scripts/check-billing.ts && node .check-out/scripts/check-billing.js",
     "db:dev": "node --import tsx scripts/dev-db.ts",
     "db:migrate": "tsx scripts/migrate.ts",
-    "test:store": "tsx scripts/check-store.ts"
+    "test:store": "tsx scripts/check-store.ts",
+    "test:import": "tsx scripts/check-import.ts"
   },
   "dependencies": {
     "next": "^15.5.25",
