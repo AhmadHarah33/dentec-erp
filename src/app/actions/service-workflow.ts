@@ -14,7 +14,7 @@ import { jobShortages, partPrice } from "@/lib/service";
 import { addDays, today } from "@/lib/dates";
 import { round2 } from "@/lib/money";
 import { guard } from "@/lib/auth/server";
-import { fail, ok, STOCK_PATHS, type Result } from "./shared";
+import { attempt, fail, ok, STOCK_PATHS, type Result } from "./shared";
 
 /** Next number in a series, computed at write time so gaps are not created. */
 function nextNumber(existing: string[], prefix: string): string {
@@ -55,7 +55,7 @@ function refreshAll(jobId: string) {
  * The result is always a draft. Nothing is issued, nothing moves, and the
  * numbers are yours to correct before it goes to the customer.
  */
-export async function invoiceJob(jobId: string): Promise<Result<string>> {
+async function invoiceJobImpl(jobId: string): Promise<Result<string>> {
   const gate = await guard("invoices", "limited");
   if (!gate.ok) return gate;
   const db = await snapshot();
@@ -170,7 +170,7 @@ function lastSupplierFor(itemId: ID, orders: PurchaseOrder[]): ID | null {
  *
  * Returns the ids created — one is the common case and the caller opens it.
  */
-export async function orderShortage(jobId: string): Promise<Result<string[]>> {
+async function orderShortageImpl(jobId: string): Promise<Result<string[]>> {
   const gate = await guard("purchasing", "edit");
   if (!gate.ok) return gate;
   const db = await snapshot();
@@ -257,4 +257,17 @@ export async function orderShortage(jobId: string): Promise<Result<string[]>> {
 
   refreshAll(jobId);
   return ok(ids);
+}
+
+/* ------------------------------------------------------------------ */
+/* Public actions. Each runs its implementation inside `attempt`, so an   */
+/* unexpected failure is returned as a Result rather than thrown.        */
+/* ------------------------------------------------------------------ */
+
+export async function invoiceJob(...args: Parameters<typeof invoiceJobImpl>): ReturnType<typeof invoiceJobImpl> {
+  return attempt(() => invoiceJobImpl(...args));
+}
+
+export async function orderShortage(...args: Parameters<typeof orderShortageImpl>): ReturnType<typeof orderShortageImpl> {
+  return attempt(() => orderShortageImpl(...args));
 }

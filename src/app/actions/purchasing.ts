@@ -7,7 +7,7 @@ import { guard } from "@/lib/auth/server";
 import { round2 } from "@/lib/money";
 import { documentRefsExist, orderInput, quantitiesInput } from "@/lib/inputs";
 import { date as checkDate, parse } from "@/lib/validate";
-import { fail, ok, STOCK_PATHS, type Result } from "./shared";
+import { attempt, fail, ok, STOCK_PATHS, type Result } from "./shared";
 
 type OrderInput = Omit<PurchaseOrder, "id" | "createdAt" | "updatedAt" | "number" | "receivedAt">;
 
@@ -29,7 +29,7 @@ function nextNumber(existing: string[], prefix: string): string {
   return head + String(highest + 1).padStart(4, "0");
 }
 
-export async function saveOrder(id: string | null, input: OrderInput): Promise<Result<string>> {
+async function saveOrderImpl(id: string | null, input: OrderInput): Promise<Result<string>> {
   const gate = await guard("purchasing", "edit");
   if (!gate.ok) return gate;
   // Only named fields are read: `receivedQty`, `receivedAt`, the number and
@@ -91,7 +91,7 @@ export async function saveOrder(id: string | null, input: OrderInput): Promise<R
  * What is outstanding is worked out inside the transaction. Worked out before
  * it, a double click received the same delivery twice.
  */
-export async function receiveOrder(
+async function receiveOrderImpl(
   id: string,
   date: string,
   quantities?: Record<string, number>,
@@ -154,7 +154,7 @@ export async function receiveOrder(
   return outcome;
 }
 
-export async function cancelOrder(id: string): Promise<Result> {
+async function cancelOrderImpl(id: string): Promise<Result> {
   const gate = await guard("purchasing", "edit");
   if (!gate.ok) return gate;
 
@@ -173,7 +173,7 @@ export async function cancelOrder(id: string): Promise<Result> {
   return ok(undefined);
 }
 
-export async function deleteOrder(id: string): Promise<Result> {
+async function deleteOrderImpl(id: string): Promise<Result> {
   const gate = await guard("purchasing", "edit");
   if (!gate.ok) return gate;
 
@@ -188,4 +188,25 @@ export async function deleteOrder(id: string): Promise<Result> {
 
   refresh();
   return ok(undefined);
+}
+
+/* ------------------------------------------------------------------ */
+/* Public actions. Each runs its implementation inside `attempt`, so an   */
+/* unexpected failure is returned as a Result rather than thrown.        */
+/* ------------------------------------------------------------------ */
+
+export async function saveOrder(...args: Parameters<typeof saveOrderImpl>): ReturnType<typeof saveOrderImpl> {
+  return attempt(() => saveOrderImpl(...args));
+}
+
+export async function receiveOrder(...args: Parameters<typeof receiveOrderImpl>): ReturnType<typeof receiveOrderImpl> {
+  return attempt(() => receiveOrderImpl(...args));
+}
+
+export async function cancelOrder(...args: Parameters<typeof cancelOrderImpl>): ReturnType<typeof cancelOrderImpl> {
+  return attempt(() => cancelOrderImpl(...args));
+}
+
+export async function deleteOrder(...args: Parameters<typeof deleteOrderImpl>): ReturnType<typeof deleteOrderImpl> {
+  return attempt(() => deleteOrderImpl(...args));
 }

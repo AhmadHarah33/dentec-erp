@@ -26,19 +26,80 @@ declare global {
   var __dentecBrowser: Promise<Browser> | undefined;
 }
 
+/**
+ * Every render opens a Chromium context (tens of MB) and may hold it for up to
+ * 30 s. Unbounded, anyone who may download an invoice can exhaust the
+ * container's memory by asking for PDFs in a loop. At most MAX_RENDERS run at
+ * once, MAX_WAITING queue behind them, and the rest are turned away.
+ */
+const MAX_RENDERS = 2;
+const MAX_WAITING = 6;
+let rendering = 0;
+const waiting: (() => void)[] = [];
+
+/** Too many PDFs in flight; the route answers 503 and the person tries again. */
+export class RenderBusy extends Error {
+  constructor() {
+    super("pdf renderer is busy");
+  }
+}
+
+async function withRenderSlot<T>(fn: () => Promise<T>): Promise<T> {
+  if (rendering >= MAX_RENDERS) {
+    if (waiting.length >= MAX_WAITING) throw new RenderBusy();
+    await new Promise<void>((resolve) => waiting.push(resolve));
+  } else {
+    rendering++;
+  }
+  try {
+    return await fn();
+  } finally {
+    const next = waiting.shift();
+    if (next) next();
+    else rendering--;
+  }
+}
+
+/**
+ * Where the headless browser fetches the print page from: this same server,
+ * over its own address, never the public one. The session cookie is handed to
+ * whatever this returns, so it must never be derived from a request header —
+ * a forged Host would send the cookie to a stranger's server. In production
+ * that means INTERNAL_ORIGIN, or else the container's own loopback.
+ */
+export function internalOrigin(requestOrigin: string): string {
+  const configured = process.env.INTERNAL_ORIGIN;
+  if (configured) return configured.replace(/\/$/, "");
+  if (process.env.NODE_ENV === "production") return `http://127.0.0.1:${process.env.PORT ?? 3000}`;
+  return requestOrigin.replace(/\/$/, "");
+}
+
 async function getBrowser(): Promise<Browser> {
   if (!globalThis.__dentecBrowser) {
-    globalThis.__dentecBrowser = import("playwright-core").then(({ chromium }) =>
-      chromium.launch({
+    const launching = import("playwright-core").then(async ({ chromium }) => {
+      const browser = await chromium.launch({
         // `playwright` (the wrapper package) registers the downloaded browser
         // path; `playwright-core` is what we import so the bundle stays small.
         executablePath: process.env.CHROMIUM_PATH || undefined,
-        args: ["--no-sandbox", "--font-render-hinting=none"],
-      }),
-    );
-    // A failed launch must not be cached, or every later request inherits it.
-    globalThis.__dentecBrowser.catch(() => {
-      globalThis.__dentecBrowser = undefined;
+        // --no-sandbox because the container does not grant Chromium the
+        // namespaces its sandbox needs; the page it renders is our own
+        // server-rendered print route, JavaScript off and every request
+        // outside our origin refused (see renderPdf).
+        // --disable-dev-shm-usage: Docker gives /dev/shm 64 MB, and Chromium
+        // crashes the tab when a long document fills it.
+        args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--font-render-hinting=none"],
+      });
+      // A crashed or killed Chromium must not stay cached: the dead handle
+      // would fail every later PDF until the container restarted.
+      browser.on("disconnected", () => {
+        if (globalThis.__dentecBrowser === launching) globalThis.__dentecBrowser = undefined;
+      });
+      return browser;
+    });
+    globalThis.__dentecBrowser = launching;
+    // A failed launch must not be cached either.
+    launching.catch(() => {
+      if (globalThis.__dentecBrowser === launching) globalThis.__dentecBrowser = undefined;
     });
   }
   return globalThis.__dentecBrowser;
@@ -54,15 +115,33 @@ export interface PdfOptions {
   landscape?: boolean;
 }
 
-export async function renderPdf(options: PdfOptions): Promise<Buffer> {
+export function renderPdf(options: PdfOptions): Promise<Buffer> {
+  return withRenderSlot(() => render(options));
+}
+
+async function render(options: PdfOptions): Promise<Buffer> {
   const browser = await getBrowser();
   const context = await browser.newContext({
     // The document is laid out in mm at 96dpi; this is A4 at that scale.
     viewport: { width: 794, height: 1123 },
     deviceScaleFactor: 2,
+    // The print route is plain server-rendered HTML and CSS. Nothing in it
+    // needs a script, and text that came from a customer's name must never
+    // be able to run one in a browser holding the session cookie.
+    javaScriptEnabled: false,
   });
 
   try {
+    // Only our own origin (and inline data: URLs) may be fetched. A document
+    // that somehow referenced another host would otherwise turn this into a
+    // way to make the server request internal addresses.
+    const allowed = new URL(options.origin).origin;
+    await context.route("**/*", (route) => {
+      const url = route.request().url();
+      if (url.startsWith("data:") || url.startsWith(allowed + "/")) return route.continue();
+      return route.abort();
+    });
+
     if (options.cookies?.length) {
       const url = new URL(options.origin);
       await context.addCookies(

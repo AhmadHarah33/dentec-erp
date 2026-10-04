@@ -7,7 +7,7 @@ import { buildStockIndex, onHand } from "@/lib/stock";
 import { guard } from "@/lib/auth/server";
 import { jobInput, SERVICE_STATUSES } from "@/lib/inputs";
 import { oneOf, parse } from "@/lib/validate";
-import { fail, ok, STOCK_PATHS, type Result } from "./shared";
+import { attempt, fail, ok, STOCK_PATHS, type Result } from "./shared";
 
 type JobInput = Omit<ServiceJob, "id" | "createdAt" | "updatedAt" | "number" | "closedAt">;
 
@@ -27,7 +27,7 @@ function nextNumber(existing: string[], prefix: string): string {
   return head + String(highest + 1).padStart(4, "0");
 }
 
-export async function saveJob(id: string | null, input: JobInput): Promise<Result<string>> {
+async function saveJobImpl(id: string | null, input: JobInput): Promise<Result<string>> {
   const gate = await guard("service", "edit");
   if (!gate.ok) return gate;
   const parsed = parse(() => jobInput(input));
@@ -109,7 +109,7 @@ export async function saveJob(id: string | null, input: JobInput): Promise<Resul
  * "not already consumed" is decided inside the transaction, two presses at
  * the same moment cannot both pass it either.
  */
-export async function consumeParts(id: string): Promise<Result<number>> {
+async function consumePartsImpl(id: string): Promise<Result<number>> {
   const gate = await guard("service", "edit");
   if (!gate.ok) return gate;
 
@@ -162,7 +162,7 @@ export async function consumeParts(id: string): Promise<Result<number>> {
   return outcome;
 }
 
-export async function setJobStatus(id: string, status: ServiceStatus): Promise<Result> {
+async function setJobStatusImpl(id: string, status: ServiceStatus): Promise<Result> {
   const gate = await guard("service", "edit");
   if (!gate.ok) return gate;
   const parsed = parse(() => oneOf(status, "status", SERVICE_STATUSES));
@@ -183,7 +183,7 @@ export async function setJobStatus(id: string, status: ServiceStatus): Promise<R
   return ok(undefined);
 }
 
-export async function deleteJob(id: string): Promise<Result> {
+async function deleteJobImpl(id: string): Promise<Result> {
   const gate = await guard("service", "edit");
   if (!gate.ok) return gate;
 
@@ -198,4 +198,25 @@ export async function deleteJob(id: string): Promise<Result> {
 
   refresh();
   return ok(undefined);
+}
+
+/* ------------------------------------------------------------------ */
+/* Public actions. Each runs its implementation inside `attempt`, so an   */
+/* unexpected failure is returned as a Result rather than thrown.        */
+/* ------------------------------------------------------------------ */
+
+export async function saveJob(...args: Parameters<typeof saveJobImpl>): ReturnType<typeof saveJobImpl> {
+  return attempt(() => saveJobImpl(...args));
+}
+
+export async function consumeParts(...args: Parameters<typeof consumePartsImpl>): ReturnType<typeof consumePartsImpl> {
+  return attempt(() => consumePartsImpl(...args));
+}
+
+export async function setJobStatus(...args: Parameters<typeof setJobStatusImpl>): ReturnType<typeof setJobStatusImpl> {
+  return attempt(() => setJobStatusImpl(...args));
+}
+
+export async function deleteJob(...args: Parameters<typeof deleteJobImpl>): ReturnType<typeof deleteJobImpl> {
+  return attempt(() => deleteJobImpl(...args));
 }

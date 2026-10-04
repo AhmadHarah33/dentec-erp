@@ -17,6 +17,10 @@ IMAGE=dentec-erp:latest
 EDGE=dentec-erp-edge
 export DOCKER_BUILDKIT=0   # no buildx on this box; the classic builder is enough
 
+# Keep the image that is running now, so a bad release can be undone with
+#   docker rm -f dentec-erp && docker run ... dentec-erp:previous  (see DEPLOY.md)
+docker tag "$IMAGE" dentec-erp:previous 2>/dev/null || true
+
 docker build -t "$IMAGE" ./src
 
 docker network inspect "$EDGE" >/dev/null 2>&1 || docker network create "$EDGE" >/dev/null

@@ -5,11 +5,25 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { getLocale } from "@/lib/i18n/server";
-import { attachmentHeader, renderPdf } from "./render";
+import { attachmentHeader, internalOrigin, RenderBusy, renderPdf } from "./render";
+import { SESSION_COOKIE } from "@/lib/auth/cookie";
+import { LOCALE_COOKIE } from "@/lib/i18n";
 import { loadDocument, pdfFilename, type DocumentKind } from "./document";
 import { currentMember } from "@/lib/auth/server";
 import { can } from "@/lib/permissions";
 import { loadStatement, readDate, statementFilename } from "./statement-doc";
+
+/** Only the cookies the print page reads. The browser has no business with any others. */
+function forwardedCookies(request: NextRequest) {
+  return request.cookies
+    .getAll()
+    .filter((c) => c.name === SESSION_COOKIE || c.name === LOCALE_COOKIE)
+    .map((c) => ({ name: c.name, value: c.value }));
+}
+
+function busy(): Response {
+  return NextResponse.json({ error: "busy" }, { status: 503, headers: { "Retry-After": "5" } });
+}
 
 export async function handlePdfRequest(
   request: NextRequest,
@@ -34,9 +48,9 @@ export async function handlePdfRequest(
 
   // The headless browser fetches the print page from this same server over
   // its internal address, not the public one: no round trip out through the
-  // tunnel and back. INTERNAL_ORIGIN is set in production (the container's
-  // own http://127.0.0.1:3000); in development the request origin is local.
-  const origin = (process.env.INTERNAL_ORIGIN ?? request.nextUrl.origin).replace(/\/$/, "");
+  // tunnel and back. See internalOrigin for why it is never taken from the
+  // request in production.
+  const origin = internalOrigin(request.nextUrl.origin);
 
   try {
     const pdf = await renderPdf({
@@ -46,7 +60,7 @@ export async function handlePdfRequest(
       // headless browser has no cookies of its own — so it is handed this
       // request's: the session (so it is signed in as the same person, with
       // the same permissions) and the locale.
-      cookies: request.cookies.getAll().map((c) => ({ name: c.name, value: c.value })),
+      cookies: forwardedCookies(request),
     });
 
     return new Response(new Uint8Array(pdf), {
@@ -59,14 +73,13 @@ export async function handlePdfRequest(
       },
     });
   } catch (error) {
-    // The usual cause is a missing Chromium on a fresh checkout, and a JSON
-    // error saying so is far more useful than a broken download.
+    if (error instanceof RenderBusy) return busy();
+    // The usual cause is a missing Chromium on a fresh checkout. The cause is
+    // logged; the response says only that it failed, because the message can
+    // carry file paths and addresses.
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[pdf] ${kind} ${id} failed:`, message);
-    return NextResponse.json(
-      { error: "render_failed", detail: message },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "render_failed" }, { status: 500 });
   }
 }
 
@@ -83,7 +96,7 @@ export async function handleStatementPdf(request: NextRequest, customerId: strin
   const loaded = await loadStatement(customerId, from, to);
   if (!loaded) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
-  const origin = (process.env.INTERNAL_ORIGIN ?? request.nextUrl.origin).replace(/\/$/, "");
+  const origin = internalOrigin(request.nextUrl.origin);
   const query = new URLSearchParams();
   if (readDate(from)) query.set("from", from!);
   if (readDate(to)) query.set("to", to!);
@@ -92,7 +105,7 @@ export async function handleStatementPdf(request: NextRequest, customerId: strin
     const pdf = await renderPdf({
       url: `${origin}/print/statement/${customerId}${query.size ? `?${query}` : ""}`,
       origin,
-      cookies: request.cookies.getAll().map((c) => ({ name: c.name, value: c.value })),
+      cookies: forwardedCookies(request),
     });
     return new Response(new Uint8Array(pdf), {
       headers: {
@@ -103,8 +116,9 @@ export async function handleStatementPdf(request: NextRequest, customerId: strin
       },
     });
   } catch (error) {
+    if (error instanceof RenderBusy) return busy();
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[pdf] statement ${customerId} failed:`, message);
-    return NextResponse.json({ error: "render_failed", detail: message }, { status: 500 });
+    return NextResponse.json({ error: "render_failed" }, { status: 500 });
   }
 }

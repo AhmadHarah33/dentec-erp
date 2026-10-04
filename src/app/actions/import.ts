@@ -6,7 +6,7 @@ import { guard } from "@/lib/auth/server";
 import { today } from "@/lib/dates";
 import { IMPORT_KINDS, MAX_IMPORT_ROWS, type ImportKind } from "@/lib/import/kinds";
 import { planImport, type RowResult } from "@/lib/import/plan";
-import { fail, ok, STOCK_PATHS, type Result } from "./shared";
+import { attempt, fail, ok, STOCK_PATHS, type Result } from "./shared";
 
 type Records = Record<string, string>[];
 
@@ -32,7 +32,7 @@ function clean(kind: string, records: unknown): { kind: ImportKind; records: Rec
 }
 
 /** Check a file's rows without writing anything. */
-export async function previewImport(kind: string, records: unknown): Promise<Result<ImportPreview>> {
+async function previewImportImpl(kind: string, records: unknown): Promise<Result<ImportPreview>> {
   const gate = await guard("settings", "edit");
   if (!gate.ok) return gate;
   const input = clean(kind, records);
@@ -47,7 +47,7 @@ export async function previewImport(kind: string, records: unknown): Promise<Res
  * the write lock, against the data as it is now: the preview may be minutes
  * old and someone may have added the same SKU since.
  */
-export async function runImport(kind: string, records: unknown): Promise<Result<{ count: number }>> {
+async function runImportImpl(kind: string, records: unknown): Promise<Result<{ count: number }>> {
   const gate = await guard("settings", "edit");
   if (!gate.ok) return gate;
   const input = clean(kind, records);
@@ -65,4 +65,17 @@ export async function runImport(kind: string, records: unknown): Promise<Result<
     revalidatePath(p);
   }
   return ok({ count: outcome });
+}
+
+/* ------------------------------------------------------------------ */
+/* Public actions. Each runs its implementation inside `attempt`, so an   */
+/* unexpected failure is returned as a Result rather than thrown.        */
+/* ------------------------------------------------------------------ */
+
+export async function previewImport(...args: Parameters<typeof previewImportImpl>): ReturnType<typeof previewImportImpl> {
+  return attempt(() => previewImportImpl(...args));
+}
+
+export async function runImport(...args: Parameters<typeof runImportImpl>): ReturnType<typeof runImportImpl> {
+  return attempt(() => runImportImpl(...args));
 }

@@ -11,6 +11,7 @@
     "db:dev": "node --import tsx scripts/dev-db.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "test:store": "tsx scripts/check-store.ts",
+    "test:actions": "tsx scripts/check-actions.ts",
     "test:import": "tsx scripts/check-import.ts"
   },
   "dependencies": {

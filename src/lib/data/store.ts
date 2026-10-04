@@ -281,6 +281,33 @@ async function currentActor(): Promise<Actor> {
 }
 
 /**
+ * A draft of the database that copies a collection the first time it is read.
+ *
+ * Cloning the whole database for every write meant a payment copied the
+ * entire stock ledger. Now an action pays only for what it touches: reading
+ * `db.payments` clones payments, and the collections it never mentions stay
+ * the same objects as in the snapshot. `touched()` says which were copied, so
+ * the write and the audit diff skip the rest.
+ */
+function lazyDraft(fresh: Database): { draft: Database; touched: () => Set<string> } {
+  const copies = new Map<string, unknown>();
+  const draft = {} as Database;
+  for (const key of Object.keys(fresh) as (keyof Database)[]) {
+    Object.defineProperty(draft, key, {
+      enumerable: true,
+      get() {
+        if (!copies.has(key)) copies.set(key, structuredClone(fresh[key]));
+        return copies.get(key);
+      },
+      set(value) {
+        copies.set(key, value);
+      },
+    });
+  }
+  return { draft, touched: () => new Set(copies.keys()) };
+}
+
+/**
  * Apply a mutation and persist it. The callback receives a private copy of
  * the database and may modify it in place; whatever it returns is returned
  * to the caller once the transaction has committed.
@@ -292,14 +319,16 @@ export async function mutate<T>(fn: (db: Database) => T | Promise<T>): Promise<T
   const { result, fresh, versions } = await sql().begin(async (tx) => {
     await tx`select pg_advisory_xact_lock(${WRITE_LOCK})`;
     const { db: fresh, versions } = await refresh(tx, state.cache, state.versions);
-    const draft = structuredClone(fresh);
+    const { draft, touched } = lazyDraft(fresh);
     const result = await fn(draft);
+    const changed = touched();
 
-    if (!same({ ...fresh.settings, updatedAt: null }, { ...draft.settings, updatedAt: null })) {
+    if (changed.has("settings") && !same({ ...fresh.settings, updatedAt: null }, { ...draft.settings, updatedAt: null })) {
       const { updatedAt: _u, ...data } = draft.settings;
       await tx`update erp.settings set data = ${tx.json(data as postgres.JSONValue)}, updated_at = now() where id = 1`;
     }
     for (const name of COLLECTIONS) {
+      if (!changed.has(name)) continue;
       await writeCollection(
         tx,
         SPECS[name],
@@ -308,7 +337,7 @@ export async function mutate<T>(fn: (db: Database) => T | Promise<T>): Promise<T
       );
     }
 
-    const entries = diffDatabases(fresh, draft);
+    const entries = diffDatabases(fresh, draft, changed);
     if (entries.length > 0) {
       await tx`insert into erp.audit_log ${tx(
         entries.map((e) => ({

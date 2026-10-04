@@ -6,12 +6,12 @@ import type { Party } from "@/lib/data/types";
 import { guard } from "@/lib/auth/server";
 import { partyInput } from "@/lib/inputs";
 import { parse } from "@/lib/validate";
-import { fail, ok, type Result } from "./shared";
+import { attempt, fail, ok, type Result } from "./shared";
 
 type PartyInput = Omit<Party, "id" | "createdAt" | "updatedAt">;
 type Which = "customers" | "suppliers";
 
-export async function saveParty(
+async function savePartyImpl(
   which: Which,
   id: string | null,
   input: PartyInput,
@@ -41,7 +41,7 @@ export async function saveParty(
  * A party with history is deactivated rather than deleted — its invoices and
  * payments must keep resolving to a name.
  */
-export async function deleteParty(
+async function deletePartyImpl(
   which: Which,
   id: string,
 ): Promise<Result<"deleted" | "archived">> {
@@ -65,4 +65,17 @@ export async function deleteParty(
   await remove(which, id);
   revalidatePath(`/${which}`);
   return ok("deleted");
+}
+
+/* ------------------------------------------------------------------ */
+/* Public actions. Each runs its implementation inside `attempt`, so an   */
+/* unexpected failure is returned as a Result rather than thrown.        */
+/* ------------------------------------------------------------------ */
+
+export async function saveParty(...args: Parameters<typeof savePartyImpl>): ReturnType<typeof savePartyImpl> {
+  return attempt(() => savePartyImpl(...args));
+}
+
+export async function deleteParty(...args: Parameters<typeof deletePartyImpl>): ReturnType<typeof deletePartyImpl> {
+  return attempt(() => deletePartyImpl(...args));
 }

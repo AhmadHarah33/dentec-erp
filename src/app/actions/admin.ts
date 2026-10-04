@@ -9,7 +9,7 @@ import { database } from "@/lib/data/store";
 import { mailEnabled } from "@/lib/mail";
 import { settingsPatch, userInput } from "@/lib/inputs";
 import { parse } from "@/lib/validate";
-import { fail, ok, type Result } from "./shared";
+import { attempt, fail, ok, type Result } from "./shared";
 
 /** What the users form may set. Passwords and links are managed by the account actions, not the form. */
 interface UserInput {
@@ -34,7 +34,7 @@ function leavesNoOwner(db: Database, id: string, next: { role: Role; active: boo
   return !stillOwner && owners.length <= 1;
 }
 
-export async function saveUser(id: string | null, input: UserInput): Promise<Result<string>> {
+async function saveUserImpl(id: string | null, input: UserInput): Promise<Result<string>> {
   const gate = await guard("settings", "edit");
   if (!gate.ok) return gate;
   const parsed = parse(() => userInput(input));
@@ -73,7 +73,7 @@ export async function saveUser(id: string | null, input: UserInput): Promise<Res
  * Remove a person. Anyone with history — a login, or a name on service jobs —
  * is archived instead: deactivated, kept for the records, signed out.
  */
-export async function deleteUser(id: string): Promise<Result<"deleted" | "archived">> {
+async function deleteUserImpl(id: string): Promise<Result<"deleted" | "archived">> {
   const gate = await guard("settings", "edit");
   if (!gate.ok) return gate;
   if (id === gate.member.user.id) return fail("users.notSelf");
@@ -100,7 +100,7 @@ export async function deleteUser(id: string): Promise<Result<"deleted" | "archiv
  * link is always returned so the owner can send it by hand; when mail is
  * configured it is also emailed.
  */
-export async function issueAccountLink(
+async function issueAccountLinkImpl(
   id: string,
   kind: "invite" | "recovery",
 ): Promise<Result<{ url: string; mailedTo: string | null }>> {
@@ -131,7 +131,7 @@ export async function issueAccountLink(
   return ok({ url: link.url, mailedTo });
 }
 
-export async function updateSettings(patch: Partial<Settings>): Promise<Result> {
+async function updateSettingsImpl(patch: Partial<Settings>): Promise<Result> {
   const gate = await guard("settings", "edit");
   if (!gate.ok) return gate;
   const parsed = parse(() => settingsPatch(patch));
@@ -144,4 +144,25 @@ export async function updateSettings(patch: Partial<Settings>): Promise<Result> 
   // Currency, tax rate and company details appear on nearly every screen.
   revalidatePath("/", "layout");
   return ok(undefined);
+}
+
+/* ------------------------------------------------------------------ */
+/* Public actions. Each runs its implementation inside `attempt`, so an   */
+/* unexpected failure is returned as a Result rather than thrown.        */
+/* ------------------------------------------------------------------ */
+
+export async function saveUser(...args: Parameters<typeof saveUserImpl>): ReturnType<typeof saveUserImpl> {
+  return attempt(() => saveUserImpl(...args));
+}
+
+export async function deleteUser(...args: Parameters<typeof deleteUserImpl>): ReturnType<typeof deleteUserImpl> {
+  return attempt(() => deleteUserImpl(...args));
+}
+
+export async function issueAccountLink(...args: Parameters<typeof issueAccountLinkImpl>): ReturnType<typeof issueAccountLinkImpl> {
+  return attempt(() => issueAccountLinkImpl(...args));
+}
+
+export async function updateSettings(...args: Parameters<typeof updateSettingsImpl>): ReturnType<typeof updateSettingsImpl> {
+  return attempt(() => updateSettingsImpl(...args));
 }

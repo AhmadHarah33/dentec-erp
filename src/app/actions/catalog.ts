@@ -6,7 +6,7 @@ import type { Category, Item } from "@/lib/data/types";
 import { guard } from "@/lib/auth/server";
 import { categoryInput, itemInput } from "@/lib/inputs";
 import { parse } from "@/lib/validate";
-import { fail, ok, type Result } from "./shared";
+import { attempt, fail, ok, type Result } from "./shared";
 
 type CategoryInput = Omit<Category, "id" | "createdAt" | "updatedAt">;
 type ItemInput = Omit<Item, "id" | "createdAt" | "updatedAt">;
@@ -21,7 +21,7 @@ function refresh(paths: string[]) {
 /* Categories                                                          */
 /* ------------------------------------------------------------------ */
 
-export async function saveCategory(
+async function saveCategoryImpl(
   id: string | null,
   input: CategoryInput,
 ): Promise<Result<string>> {
@@ -58,7 +58,7 @@ export async function saveCategory(
   return ok(row.id);
 }
 
-export async function deleteCategory(id: string): Promise<Result> {
+async function deleteCategoryImpl(id: string): Promise<Result> {
   const gate = await guard("catalog", "edit");
   if (!gate.ok) return gate;
   const db = await snapshot();
@@ -77,7 +77,7 @@ export async function deleteCategory(id: string): Promise<Result> {
 /* Items                                                               */
 /* ------------------------------------------------------------------ */
 
-export async function saveItem(id: string | null, input: ItemInput): Promise<Result<string>> {
+async function saveItemImpl(id: string | null, input: ItemInput): Promise<Result<string>> {
   const gate = await guard("catalog", "edit");
   if (!gate.ok) return gate;
   const parsed = parse(() => itemInput(input));
@@ -105,7 +105,7 @@ export async function saveItem(id: string | null, input: ItemInput): Promise<Res
  * orphan every stock move and invoice line that references it, and those are
  * the records the business actually needs to keep.
  */
-export async function deleteItem(id: string): Promise<Result<"deleted" | "archived">> {
+async function deleteItemImpl(id: string): Promise<Result<"deleted" | "archived">> {
   const gate = await guard("catalog", "edit");
   if (!gate.ok) return gate;
   const db = await snapshot();
@@ -126,3 +126,24 @@ export async function deleteItem(id: string): Promise<Result<"deleted" | "archiv
   return ok("deleted");
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Public actions. Each runs its implementation inside `attempt`, so an   */
+/* unexpected failure is returned as a Result rather than thrown.        */
+/* ------------------------------------------------------------------ */
+
+export async function saveCategory(...args: Parameters<typeof saveCategoryImpl>): ReturnType<typeof saveCategoryImpl> {
+  return attempt(() => saveCategoryImpl(...args));
+}
+
+export async function deleteCategory(...args: Parameters<typeof deleteCategoryImpl>): ReturnType<typeof deleteCategoryImpl> {
+  return attempt(() => deleteCategoryImpl(...args));
+}
+
+export async function saveItem(...args: Parameters<typeof saveItemImpl>): ReturnType<typeof saveItemImpl> {
+  return attempt(() => saveItemImpl(...args));
+}
+
+export async function deleteItem(...args: Parameters<typeof deleteItemImpl>): ReturnType<typeof deleteItemImpl> {
+  return attempt(() => deleteItemImpl(...args));
+}

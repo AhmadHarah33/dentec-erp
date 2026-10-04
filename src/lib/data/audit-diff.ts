@@ -49,11 +49,17 @@ function stripped(row: Row): Row {
   return out;
 }
 
-export function diffDatabases(before: Database, after: Database): AuditEntry[] {
+/**
+ * `only` limits the comparison to collections the mutation actually touched
+ * (`settings` included). Untouched ones are the same objects on both sides, so
+ * walking them would cost a full pass over the data to find nothing.
+ */
+export function diffDatabases(before: Database, after: Database, only?: ReadonlySet<string>): AuditEntry[] {
   const out: AuditEntry[] = [];
+  if (only && !only.has("settings") && !COLLECTIONS.some((n) => only.has(n))) return out;
 
   const { updatedAt: _a, ...settingsBefore } = before.settings;
-  const { updatedAt: _b, ...settingsAfter } = after.settings;
+  const { updatedAt: _b, ...settingsAfter } = only && !only.has("settings") ? before.settings : after.settings;
   const changedSettings = Object.keys(settingsAfter).filter(
     (k) => !same((settingsBefore as Row)[k], (settingsAfter as Row)[k]),
   );
@@ -70,6 +76,7 @@ export function diffDatabases(before: Database, after: Database): AuditEntry[] {
 
   for (const name of COLLECTIONS) {
     if (NOT_LOGGED.includes(name)) continue;
+    if (only && !only.has(name)) continue;
     const was = new Map((before[name] as unknown as Row[]).map((r) => [r.id as string, r]));
     for (const row of after[name] as unknown as Row[]) {
       const id = row.id as string;

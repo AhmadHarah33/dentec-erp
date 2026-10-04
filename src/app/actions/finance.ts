@@ -3,11 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { create, remove, snapshot, update } from "@/lib/data/repository";
 import type { Expense, Payment } from "@/lib/data/types";
-import { round2 } from "@/lib/money";
+import { round2, toBase } from "@/lib/money";
+import { invoiceOutstanding } from "@/lib/queries";
 import { guard } from "@/lib/auth/server";
 import { expenseInput, paymentInput } from "@/lib/inputs";
 import { parse } from "@/lib/validate";
-import { fail, ok, type Result } from "./shared";
+import { attempt, fail, ok, type Result } from "./shared";
 import { syncStatus } from "@/lib/invoice-status";
 
 type PaymentInput = Omit<Payment, "id" | "createdAt" | "updatedAt">;
@@ -19,7 +20,7 @@ function refresh() {
   }
 }
 
-export async function savePayment(
+async function savePaymentImpl(
   id: string | null,
   input: PaymentInput,
 ): Promise<Result<string>> {
@@ -38,6 +39,16 @@ export async function savePayment(
     return fail("msg.error", "unknown-reference");
   }
   if (id && !db.payments.some((p) => p.id === id)) return fail("msg.error", "not-found");
+  if (data.invoiceId) {
+    // A payment tied to an invoice cannot settle more than is still owed on it
+    // (not counting itself, when it is being edited).
+    const invoice = db.salesInvoices.find((i) => i.id === data.invoiceId);
+    if (!invoice || invoice.status === "draft" || invoice.status === "void") return fail("msg.error", "not-issued");
+    const others = db.payments.filter((p) => p.id !== id);
+    if (data.direction === "in" && toBase(round2(data.amount), data.fxRate) > invoiceOutstanding(invoice, others) + 0.01) {
+      return fail("invoice.overpay");
+    }
+  }
 
   const clean = { ...data, amount: round2(data.amount) };
   const row = id ? await update("payments", id, clean) : await create("payments", clean);
@@ -48,7 +59,7 @@ export async function savePayment(
   return ok(row.id);
 }
 
-export async function deletePayment(id: string, invoiceId: string | null): Promise<Result> {
+async function deletePaymentImpl(id: string, invoiceId: string | null): Promise<Result> {
   const gate = await guard("finance", "edit");
   if (!gate.ok) return gate;
   await remove("payments", id);
@@ -57,7 +68,7 @@ export async function deletePayment(id: string, invoiceId: string | null): Promi
   return ok(undefined);
 }
 
-export async function saveExpense(
+async function saveExpenseImpl(
   id: string | null,
   input: ExpenseInput,
 ): Promise<Result<string>> {
@@ -76,10 +87,31 @@ export async function saveExpense(
   return ok(row.id);
 }
 
-export async function deleteExpense(id: string): Promise<Result> {
+async function deleteExpenseImpl(id: string): Promise<Result> {
   const gate = await guard("finance", "edit");
   if (!gate.ok) return gate;
   await remove("expenses", id);
   refresh();
   return ok(undefined);
+}
+
+/* ------------------------------------------------------------------ */
+/* Public actions. Each runs its implementation inside `attempt`, so an   */
+/* unexpected failure is returned as a Result rather than thrown.        */
+/* ------------------------------------------------------------------ */
+
+export async function savePayment(...args: Parameters<typeof savePaymentImpl>): ReturnType<typeof savePaymentImpl> {
+  return attempt(() => savePaymentImpl(...args));
+}
+
+export async function deletePayment(...args: Parameters<typeof deletePaymentImpl>): ReturnType<typeof deletePaymentImpl> {
+  return attempt(() => deletePaymentImpl(...args));
+}
+
+export async function saveExpense(...args: Parameters<typeof saveExpenseImpl>): ReturnType<typeof saveExpenseImpl> {
+  return attempt(() => saveExpenseImpl(...args));
+}
+
+export async function deleteExpense(...args: Parameters<typeof deleteExpenseImpl>): ReturnType<typeof deleteExpenseImpl> {
+  return attempt(() => deleteExpenseImpl(...args));
 }

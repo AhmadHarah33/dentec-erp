@@ -6,9 +6,10 @@ import type { BillingRegion, DispatchInfo, DocumentLine, InvoiceDocumentType, Sa
 import { needsDispatch, normalisePlate } from "@/lib/billing/region";
 import { buildStockIndex, onHand } from "@/lib/stock";
 import { computeTotals, round2, toBase } from "@/lib/money";
-import { paidForInvoice } from "@/lib/queries";
+import { invoiceOutstanding, paidForInvoice } from "@/lib/queries";
+import { can } from "@/lib/permissions";
 import { addMonths } from "@/lib/dates";
-import { fail, ok, STOCK_PATHS, type Result } from "./shared";
+import { attempt, fail, ok, STOCK_PATHS, type Result } from "./shared";
 import { syncStatus } from "@/lib/invoice-status";
 import { guard } from "@/lib/auth/server";
 import {
@@ -48,7 +49,7 @@ function validate(lines: DocumentLine[]): Result<true> {
   return ok(true);
 }
 
-export async function saveInvoice(
+async function saveInvoiceImpl(
   id: string | null,
   input: InvoiceInput,
 ): Promise<Result<string>> {
@@ -107,7 +108,7 @@ export async function saveInvoice(
  * a buyer joins the e-Fatura user list, or a shipment turns out to need an
  * e-İrsaliye. This is the one thing editable after issue.
  */
-export async function setInvoiceBilling(
+async function setInvoiceBillingImpl(
   id: string,
   input: {
     billingRegion: BillingRegion;
@@ -139,6 +140,17 @@ export async function setInvoiceBilling(
     const invoice = db.salesInvoices.find((i) => i.id === id);
     if (!invoice) return fail("msg.error", "not-found");
     if (invoice.status === "void") return fail("msg.error", "void");
+    // Region and document type stay correctable after issue — that is the point
+    // of this action. The conversion rate and currency on the printed export
+    // invoice are figures a customer has been shown, so after issue only
+    // someone who may void invoices can change them.
+    if (
+      invoice.status !== "draft" &&
+      !can(gate.member.role, "invoices", "edit") &&
+      (data.localCurrency !== invoice.localCurrency || data.localRate !== invoice.localRate)
+    ) {
+      return fail("auth.forbidden", "invoices");
+    }
     invoice.billingRegion = data.billingRegion;
     invoice.documentType = data.documentType;
     invoice.dispatch = dispatch;
@@ -165,7 +177,7 @@ export async function setInvoiceBilling(
  * serial-tracked items need exactly one serial per unit sold; each becomes a
  * `units` record carrying the customer, the invoice and the warranty end.
  */
-export async function issueInvoice(
+async function issueInvoiceImpl(
   id: string,
   serials: Record<string, string[]> = {},
 ): Promise<Result> {
@@ -276,7 +288,7 @@ export async function issueInvoice(
  * The status and payment checks are inside the transaction: run beforehand,
  * two clicks both passed them and the stock was returned twice.
  */
-export async function voidInvoice(id: string): Promise<Result> {
+async function voidInvoiceImpl(id: string): Promise<Result> {
   const gate = await guard("invoices", "edit");
   if (!gate.ok) return gate;
 
@@ -319,7 +331,7 @@ export async function voidInvoice(id: string): Promise<Result> {
   return ok(undefined);
 }
 
-export async function deleteInvoice(id: string): Promise<Result> {
+async function deleteInvoiceImpl(id: string): Promise<Result> {
   const gate = await guard("invoices", "limited");
   if (!gate.ok) return gate;
 
@@ -337,7 +349,7 @@ export async function deleteInvoice(id: string): Promise<Result> {
 }
 
 /** Record money received, then let the invoice status follow from it. */
-export async function recordInvoicePayment(input: {
+async function recordInvoicePaymentImpl(input: {
   invoiceId: string;
   date: string;
   amount: number;
@@ -357,6 +369,11 @@ export async function recordInvoicePayment(input: {
     if (!invoice) return fail("msg.error", "not-found");
     if (invoice.status === "draft" || invoice.status === "void") {
       return fail("msg.error", "not-issued");
+    }
+    // Checked under the lock, against what has been paid so far: two cashiers
+    // entering the same cheque cannot both fit in the balance.
+    if (toBase(round2(data.amount), invoice.fxRate) > invoiceOutstanding(invoice, db.payments) + 0.01) {
+      return fail("invoice.overpay");
     }
     const ts = h.now();
     db.payments.push({
@@ -384,4 +401,33 @@ export async function recordInvoicePayment(input: {
   await syncStatus(data.invoiceId);
   refresh(data.invoiceId);
   return ok(undefined);
+}
+
+/* ------------------------------------------------------------------ */
+/* Public actions. Each runs its implementation inside `attempt`, so an   */
+/* unexpected failure is returned as a Result rather than thrown.        */
+/* ------------------------------------------------------------------ */
+
+export async function saveInvoice(...args: Parameters<typeof saveInvoiceImpl>): ReturnType<typeof saveInvoiceImpl> {
+  return attempt(() => saveInvoiceImpl(...args));
+}
+
+export async function setInvoiceBilling(...args: Parameters<typeof setInvoiceBillingImpl>): ReturnType<typeof setInvoiceBillingImpl> {
+  return attempt(() => setInvoiceBillingImpl(...args));
+}
+
+export async function issueInvoice(...args: Parameters<typeof issueInvoiceImpl>): ReturnType<typeof issueInvoiceImpl> {
+  return attempt(() => issueInvoiceImpl(...args));
+}
+
+export async function voidInvoice(...args: Parameters<typeof voidInvoiceImpl>): ReturnType<typeof voidInvoiceImpl> {
+  return attempt(() => voidInvoiceImpl(...args));
+}
+
+export async function deleteInvoice(...args: Parameters<typeof deleteInvoiceImpl>): ReturnType<typeof deleteInvoiceImpl> {
+  return attempt(() => deleteInvoiceImpl(...args));
+}
+
+export async function recordInvoicePayment(...args: Parameters<typeof recordInvoicePaymentImpl>): ReturnType<typeof recordInvoicePaymentImpl> {
+  return attempt(() => recordInvoicePaymentImpl(...args));
 }

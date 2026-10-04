@@ -7,7 +7,7 @@ import { buildStockIndex, onHand } from "@/lib/stock";
 import { guard } from "@/lib/auth/server";
 import { adjustInput, transferInput, warehouseInput } from "@/lib/inputs";
 import { parse } from "@/lib/validate";
-import { fail, ok, STOCK_PATHS, type Result } from "./shared";
+import { attempt, fail, ok, STOCK_PATHS, type Result } from "./shared";
 
 type WarehouseInput = Omit<Warehouse, "id" | "createdAt" | "updatedAt">;
 
@@ -19,7 +19,7 @@ function refresh() {
 /* Warehouses                                                          */
 /* ------------------------------------------------------------------ */
 
-export async function saveWarehouse(
+async function saveWarehouseImpl(
   id: string | null,
   input: WarehouseInput,
 ): Promise<Result<string>> {
@@ -54,7 +54,7 @@ export async function saveWarehouse(
   return ok(rowId);
 }
 
-export async function deleteWarehouse(id: string): Promise<Result> {
+async function deleteWarehouseImpl(id: string): Promise<Result> {
   const gate = await guard("settings", "edit");
   if (!gate.ok) return gate;
   const db = await snapshot();
@@ -88,7 +88,7 @@ export async function deleteWarehouse(id: string): Promise<Result> {
  * The balance is read inside the transaction that writes the move. Read
  * before it, two simultaneous corrections both saw enough stock.
  */
-export async function adjustStock(input: {
+async function adjustStockImpl(input: {
   itemId: string;
   warehouseId: string;
   qtyDelta: number;
@@ -134,7 +134,7 @@ export async function adjustStock(input: {
 }
 
 /** Two opposing moves, written together so a transfer can never half-happen. */
-export async function transferStock(input: {
+async function transferStockImpl(input: {
   itemId: string;
   fromWarehouseId: string;
   toWarehouseId: string;
@@ -185,4 +185,25 @@ export async function transferStock(input: {
 
   refresh();
   return ok(undefined);
+}
+
+/* ------------------------------------------------------------------ */
+/* Public actions. Each runs its implementation inside `attempt`, so an   */
+/* unexpected failure is returned as a Result rather than thrown.        */
+/* ------------------------------------------------------------------ */
+
+export async function saveWarehouse(...args: Parameters<typeof saveWarehouseImpl>): ReturnType<typeof saveWarehouseImpl> {
+  return attempt(() => saveWarehouseImpl(...args));
+}
+
+export async function deleteWarehouse(...args: Parameters<typeof deleteWarehouseImpl>): ReturnType<typeof deleteWarehouseImpl> {
+  return attempt(() => deleteWarehouseImpl(...args));
+}
+
+export async function adjustStock(...args: Parameters<typeof adjustStockImpl>): ReturnType<typeof adjustStockImpl> {
+  return attempt(() => adjustStockImpl(...args));
+}
+
+export async function transferStock(...args: Parameters<typeof transferStockImpl>): ReturnType<typeof transferStockImpl> {
+  return attempt(() => transferStockImpl(...args));
 }

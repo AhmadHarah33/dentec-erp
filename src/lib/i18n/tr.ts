@@ -513,6 +513,7 @@ const tr: Record<MessageKey, string> = {
   "auth.locked": "Çok fazla hatalı deneme. 15 dakika bekleyip tekrar deneyin.",
   "auth.notMember": "Bu hesap Dentec sistemine eklenmemiş. Sistem yöneticisinden davet isteyin.",
   "auth.passwordShort": "Şifre en az 10 karakter olmalı",
+  "invoice.overpay": "Tutar, faturanın kalan bakiyesini aşıyor",
   "auth.passwordLong": "Şifre çok uzun (en fazla 128 karakter)",
   "auth.linkInvalid": "Bağlantı geçersiz veya süresi dolmuş. Yöneticiden yeni bir bağlantı isteyin.",
   "auth.passwordRejected": "Şifre kaydedilemedi",
