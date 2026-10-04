@@ -148,11 +148,11 @@ when his email is known.
 - A one-time bootstrap script creates the owner account.
 - **Checkpoint:** log in as each role and confirm what is allowed and refused.
 
-## Phase 4 — Features — built 2026-10-04, tested locally; server steps pending
+## Phase 4 — Features — built and installed 2026-10-04, awaiting owner approval
 
 All built and verified on the local throwaway database (`npm run test:store`
-15 checks, `npm run test:import`, typecheck, production build). The migrations
-0004-0006 are **not yet on the server**.
+15 checks, `npm run test:import`, typecheck, production build). Migrations
+0004-0006 are applied on the server (backup before: `before-phase4-20261004-010024.dump`).
 
 - **Audit log** ✅ `0005`. Written by the app inside the same transaction as
   every change (a diff of the database before and after), so it cannot drift
@@ -180,10 +180,13 @@ All built and verified on the local throwaway database (`npm run test:store`
   customers, suppliers, opening stock from CSV or .xlsx with a template
   download. Preview with row-by-row errors; all-or-nothing write that
   re-validates under the write lock.
-- **Backups** — scripts written (`deploy/backup.sh`, `deploy/restore-test.sh`),
-  **not installed**. Installing means a cron entry for the deploy user on the
-  server, one real backup and one restore test into a scratch database
-  (`dentec_restore_test`, dropped afterwards). Needs the owner's go-ahead.
+- **Backups** ✅ installed. `/DATA/AppData/dentec-erp/backup.sh` dumps only the
+  `erp` schema (custom format, verified readable before it is kept) every night
+  at 02:30 via the deploy user's crontab, keeps 30 days, logs to
+  `backups/backup.log` / `cron.log`. First run and a real restore test passed
+  (`restore-test.sh`: 23 tables, identical row counts, scratch database
+  dropped). The first scheduled run (02:30) is still to be confirmed. Backups
+  sit on the same box, so an off-box copy is still advisable.
 - **Checkpoint:** demo of each feature.
 
 ## Phase 5 — Deployment
