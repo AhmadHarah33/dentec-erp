@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useLocale } from "@/lib/i18n/context";
 import { Button } from "@/components/ui/primitives";
 import { IconDownload } from "@/components/ui/icons";
+import { DEMO } from "@/lib/demo";
 
 /**
  * Fetches the PDF and hands it to the browser as a save.
@@ -56,6 +57,9 @@ export function DownloadPdfButton({
       setBusy(false);
     }
   }
+
+  // The demo host has no Chromium to make the PDF; the print view still works.
+  if (DEMO) return null;
 
   return (
     <Button onClick={download} disabled={busy}>
