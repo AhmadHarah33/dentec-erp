@@ -189,7 +189,7 @@ All built and verified on the local throwaway database (`npm run test:store`
   sit on the same box, so an off-box copy is still advisable.
 - **Checkpoint:** demo of each feature.
 
-## Phase 5 — Deployment
+## Phase 5 — Deployment — live at https://erp.dentec.cloud since 2026-10-04, owner-verified
 
 - `Dockerfile`: Next standalone build plus Chromium for PDFs.
 - `docker-compose` on the ZimaOS box, on Supabase's Docker network, with a
@@ -198,6 +198,12 @@ All built and verified on the local throwaway database (`npm run test:store`
   and reset links work.
 - `DEPLOY.md` runbook: update, restart, logs, backup, restore.
 - **Checkpoint:** live at the public URL over HTTPS.
+
+**As built:** the box has no `docker compose` or Node, so `deploy.sh` uses plain
+docker: the app joins `supabase_default` and a private `dentec-erp-edge`
+network; the tunnel (`dentec-erp-tunnel`) sits on the private network only.
+Option B for `SITE_URL`: the app is its own auth, so Supabase config was not
+touched. Runbook: `DEPLOY.md`.
 
 ## Phase 6 — Verification and handover
 
