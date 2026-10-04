@@ -13,6 +13,7 @@
     "test:store": "tsx scripts/check-store.ts",
     "test:actions": "tsx scripts/check-actions.ts",
     "seed:demo": "tsx scripts/seed-demo.ts",
+    "demo:snapshot": "tsx scripts/build-demo-snapshot.ts",
     "test:import": "tsx scripts/check-import.ts"
   },
   "dependencies": {

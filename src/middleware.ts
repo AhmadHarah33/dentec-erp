@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE } from "@/lib/auth/cookie";
+import { DEMO } from "@/lib/demo";
 
 /**
  * The front door. Runs before every request except static files and sends
@@ -22,6 +23,8 @@ const PUBLIC = [/^\/login$/, /^\/forgot$/, /^\/auth\//];
 const ANONYMOUS_BODY_LIMIT = 32 * 1024;
 
 export function middleware(request: NextRequest) {
+  // The showcase copy has no sign-in: everyone browses as a demo role.
+  if (DEMO) return NextResponse.next();
   const path = request.nextUrl.pathname;
   const signedIn = request.cookies.has(SESSION_COOKIE);
   if (!signedIn && request.method === "POST") {

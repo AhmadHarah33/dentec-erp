@@ -16,6 +16,7 @@
 import "server-only";
 import { cache } from "react";
 import { cookies, headers } from "next/headers";
+import { DEMO, DEMO_ROLE_COOKIE, DEMO_ROLES } from "@/lib/demo";
 import { redirect } from "next/navigation";
 import { database } from "@/lib/data/store";
 import { snapshot } from "@/lib/data/repository";
@@ -96,6 +97,16 @@ export async function endAllSessions(userId: string): Promise<void> {
  */
 export const currentMember = cache(async (): Promise<Member | null> => {
   const store = await cookies();
+
+  // Demo mode: no accounts. The visitor is whichever demo role the banner picked.
+  if (DEMO) {
+    const wanted = store.get(DEMO_ROLE_COOKIE)?.value ?? "owner";
+    const role = (DEMO_ROLES as readonly string[]).includes(wanted) ? wanted : "owner";
+    const db = await snapshot();
+    const user = db.users.find((u) => u.active && u.role === role) ?? db.users.find((u) => u.active);
+    return user ? { user, role: user.role, email: user.email } : null;
+  }
+
   const token = store.get(SESSION_COOKIE)?.value;
   if (!token) return null;
 

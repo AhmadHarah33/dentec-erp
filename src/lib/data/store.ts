@@ -23,6 +23,8 @@
 import postgres from "postgres";
 import { COLLECTIONS, SPECS, snake, tablesOf, type ChildSpec, type TableSpec } from "./schema-map";
 import { diffDatabases, type Actor } from "./audit-diff";
+import { lazyDraft } from "./draft";
+import { DEMO } from "@/lib/demo";
 import type { CollectionName, Database, Settings } from "./types";
 
 type Sql = postgres.Sql<Record<string, unknown>>;
@@ -197,6 +199,8 @@ async function refresh(
 
 /** Read-only snapshot of the database. Do not mutate what this returns. */
 export async function getDb(): Promise<Database> {
+  // The showcase copy keeps its data in memory and has no database at all.
+  if (DEMO) return (await import("./demo-store")).demoGetDb();
   // Concurrent requests share one in-flight refresh rather than each running
   // their own.
   if (state.loading) return state.loading;
@@ -281,38 +285,12 @@ async function currentActor(): Promise<Actor> {
 }
 
 /**
- * A draft of the database that copies a collection the first time it is read.
- *
- * Cloning the whole database for every write meant a payment copied the
- * entire stock ledger. Now an action pays only for what it touches: reading
- * `db.payments` clones payments, and the collections it never mentions stay
- * the same objects as in the snapshot. `touched()` says which were copied, so
- * the write and the audit diff skip the rest.
- */
-function lazyDraft(fresh: Database): { draft: Database; touched: () => Set<string> } {
-  const copies = new Map<string, unknown>();
-  const draft = {} as Database;
-  for (const key of Object.keys(fresh) as (keyof Database)[]) {
-    Object.defineProperty(draft, key, {
-      enumerable: true,
-      get() {
-        if (!copies.has(key)) copies.set(key, structuredClone(fresh[key]));
-        return copies.get(key);
-      },
-      set(value) {
-        copies.set(key, value);
-      },
-    });
-  }
-  return { draft, touched: () => new Set(copies.keys()) };
-}
-
-/**
  * Apply a mutation and persist it. The callback receives a private copy of
  * the database and may modify it in place; whatever it returns is returned
  * to the caller once the transaction has committed.
  */
 export async function mutate<T>(fn: (db: Database) => T | Promise<T>): Promise<T> {
+  if (DEMO) return (await import("./demo-store")).demoMutate(fn);
   // Resolved before the transaction opens: looking up the session needs a
   // connection of its own, and a pool of one would wait on itself.
   const actor = await currentActor();
@@ -372,11 +350,17 @@ export async function mutate<T>(fn: (db: Database) => T | Promise<T>): Promise<T
  * Database (see migration 0002). Nothing else should need this.
  */
 export function database(): Sql {
+  // Demo mode has no accounts, sessions or audit table to talk to: every query
+  // answers "no rows", which is what each caller already treats as "nothing there".
+  if (DEMO) return noDatabase;
   return sql();
 }
 
+const noDatabase = (() => Promise.resolve([])) as unknown as Sql;
+
 /** Where the data lives, for the settings page. Never includes the password. */
 export function databaseLabel(): string {
+  if (DEMO) return "demo (in memory)";
   const url = process.env.DATABASE_URL;
   if (!url) return "—";
   try {
