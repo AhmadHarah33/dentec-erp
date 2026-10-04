@@ -14,9 +14,21 @@ import { SESSION_COOKIE } from "@/lib/auth/cookie";
 /** Reachable without signing in. Everything else needs a session. */
 const PUBLIC = [/^\/login$/, /^\/forgot$/, /^\/auth\//];
 
+/**
+ * Server actions accept 8 MB so the import tool can post a few thousand rows.
+ * Someone with no session has no business sending more than a form's worth —
+ * the sign-in and reset forms are a few hundred bytes.
+ */
+const ANONYMOUS_BODY_LIMIT = 32 * 1024;
+
 export function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
-  if (request.cookies.has(SESSION_COOKIE) || PUBLIC.some((re) => re.test(path))) {
+  const signedIn = request.cookies.has(SESSION_COOKIE);
+  if (!signedIn && request.method === "POST") {
+    const length = Number(request.headers.get("content-length") ?? 0);
+    if (length > ANONYMOUS_BODY_LIMIT) return new NextResponse(null, { status: 413 });
+  }
+  if (signedIn || PUBLIC.some((re) => re.test(path))) {
     return NextResponse.next();
   }
   // API routes answer 401 instead of a login page a script cannot use.

@@ -63,6 +63,12 @@ export default async function CustomerPage({
       };
     });
 
+  // The page is for everyone who may see customers; the money on it follows
+  // the areas it comes from. A technician sees the company and its machines,
+  // not what it owes.
+  const seeInvoices = can(member.role, "invoices", "view");
+  const seeMoney = can(member.role, "finance", "view");
+
   const balance = customerBalance(id, db.salesInvoices, db.payments);
   const billed = invoices.filter(isLive).reduce((s, i) => s + invoiceTotalBase(i), 0);
   const received = payments.reduce((s, p) => s + paymentBase(p), 0);
@@ -85,7 +91,9 @@ export default async function CustomerPage({
         }
       />
 
+      {(seeInvoices || seeMoney) && (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        {seeMoney && (
         <StatTile
           label={t("label.balance")}
           value={money(balance)}
@@ -98,19 +106,25 @@ export default async function CustomerPage({
               : undefined
           }
         />
-        <StatTile label={t("report.revenue")} value={money(billed)} icon={IconChart} />
+        )}
+        {seeInvoices && <StatTile label={t("report.revenue")} value={money(billed)} icon={IconChart} />}
+        {seeMoney && (
         <StatTile
           label={t("label.paid")}
           value={money(received)}
           icon={IconCheck}
           tone="success"
         />
+        )}
+        {seeInvoices && (
         <StatTile
           label={t("nav.invoices")}
           value={String(invoices.length)}
           icon={IconDocument}
         />
+        )}
       </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-1 h-fit">
@@ -144,6 +158,7 @@ export default async function CustomerPage({
         </Card>
 
         <div className="lg:col-span-2 min-w-0 flex flex-col gap-4">
+          {seeInvoices && (
           <Card>
             <CardHeader title={t("nav.invoices")} meta={String(invoices.length)} />
             {invoices.length === 0 ? (
@@ -157,7 +172,7 @@ export default async function CustomerPage({
                       <th className="h-10 px-3 text-start font-medium">{t("label.date")}</th>
                       <th className="h-10 px-3 text-start font-medium">{t("label.status")}</th>
                       <th className="h-10 px-3 text-end font-medium">{t("label.total")}</th>
-                      <th className="h-10 px-3 text-end font-medium">{t("label.balance")}</th>
+                      {seeMoney && <th className="h-10 px-3 text-end font-medium">{t("label.balance")}</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -179,6 +194,7 @@ export default async function CustomerPage({
                         <td className="h-10 px-3 text-end">
                           <Num>{money(invoiceTotalBase(inv))}</Num>
                         </td>
+                        {seeMoney && (
                         <td className="h-10 px-3 text-end">
                           <Num
                             className={
@@ -190,6 +206,7 @@ export default async function CustomerPage({
                             {money(invoiceOutstanding(inv, db.payments))}
                           </Num>
                         </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -197,6 +214,7 @@ export default async function CustomerPage({
               </div>
             )}
           </Card>
+          )}
 
           <Card>
             <CardHeader title={t("nav.service")} meta={String(jobs.length)} />
@@ -226,6 +244,7 @@ export default async function CustomerPage({
             )}
           </Card>
 
+          {seeMoney && (
           <Card>
             <CardHeader title={t("page.accounting.payments")} meta={String(payments.length)} />
             {payments.length === 0 ? (
@@ -253,6 +272,7 @@ export default async function CustomerPage({
               </table>
             )}
           </Card>
+          )}
         </div>
       </div>
       {machines.length > 0 && (

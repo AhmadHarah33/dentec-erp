@@ -39,12 +39,14 @@ export function InventoryClient({
   rows,
   warehouses,
   categories,
+  showCost,
   currency,
   locale,
 }: {
   rows: InventoryRow[];
   warehouses: Warehouse[];
   categories: Category[];
+  showCost: boolean;
   currency: CurrencyCode;
   locale: string;
 }) {
@@ -249,12 +251,14 @@ export function InventoryClient({
       <PageTabs tabs={STOCK_TABS.map((x) => ({ href: x.href, label: t(x.labelKey) }))} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatTile
-          label={t("dash.stockValue")}
-          value={formatMoneyCompact(totals.value, currency, locale)}
-          icon={IconCoins}
-          meta={t("dash.atStandardCost")}
-        />
+        {showCost && (
+          <StatTile
+            label={t("dash.stockValue")}
+            value={formatMoneyCompact(totals.value, currency, locale)}
+            icon={IconCoins}
+            meta={t("dash.atStandardCost")}
+          />
+        )}
         <StatTile
           label={t("label.quantity")}
           value={formatNumber(totals.units, locale, 0)}
@@ -276,7 +280,7 @@ export function InventoryClient({
 
       <DataTable
         rows={filtered}
-        columns={canEdit ? columns : columns.filter((c) => c.key !== "actions")}
+        columns={columns.filter((c) => (canEdit || c.key !== "actions") && (showCost || c.key !== "value"))}
         rowKey={(r) => r.item.id}
         pageSize={30}
         emptyTitle={t("empty.items")}

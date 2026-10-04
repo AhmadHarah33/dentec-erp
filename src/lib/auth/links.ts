@@ -41,16 +41,25 @@ const LINK_HOURS = 24;
  * of the same kind are voided: the newest invitation is the only one that works.
  * Server-only: the caller must already be authorised.
  */
-export async function issueToken(userId: string, type: LinkType): Promise<{ url: string; type: LinkType }> {
+export async function issueToken(
+  userId: string,
+  type: LinkType,
+  opts: { supersede?: boolean; origin?: string } = {},
+): Promise<{ url: string; type: LinkType }> {
   const kind = KIND[type];
   const token = newToken();
   const sql = database();
-  await sql`delete from erp.auth_tokens where user_id = ${userId} and kind = ${kind} and used_at is null`;
+  // The owner issuing a link replaces the older one. A stranger asking for
+  // "forgot password" must not: it would let anyone cancel a link the real
+  // person is about to use, over and over.
+  if (opts.supersede ?? true) {
+    await sql`delete from erp.auth_tokens where user_id = ${userId} and kind = ${kind} and used_at is null`;
+  }
   await sql`
     insert into erp.auth_tokens (id, user_id, kind, expires_at)
     values (${tokenId(token)}, ${userId}, ${kind}, ${new Date(Date.now() + LINK_HOURS * 3600 * 1000).toISOString()}::timestamptz)`;
   await sql`delete from erp.auth_tokens where expires_at < now() - interval '7 days'`;
-  const origin = await appOrigin();
+  const origin = opts.origin ?? (await appOrigin());
   return { type, url: `${origin}/auth/accept?type=${type}&token=${encodeURIComponent(token)}` };
 }
 
@@ -67,9 +76,19 @@ export async function consumeToken(type: LinkType, token: string): Promise<strin
   return (row?.user_id as string | undefined) ?? null;
 }
 
+/** Once a link has been used, every other outstanding link for that account is dead. */
+export async function voidTokens(userId: string): Promise<void> {
+  await database()`delete from erp.auth_tokens where user_id = ${userId} and used_at is null`;
+}
+
 /** Email a link, in the recipient's interface language (Arabic by default). */
-export async function emailAccountLink(to: string, type: LinkType, url: string) {
-  const { t, locale } = await getI18n();
+export async function emailAccountLink(
+  to: string,
+  type: LinkType,
+  url: string,
+  i18n?: Awaited<ReturnType<typeof getI18n>>,
+) {
+  const { t, locale } = i18n ?? (await getI18n());
   const { html, text } = actionEmail({
     dir: locale === "ar" ? "rtl" : "ltr",
     heading: t(type === "invite" ? "mail.inviteHeading" : "mail.resetHeading"),

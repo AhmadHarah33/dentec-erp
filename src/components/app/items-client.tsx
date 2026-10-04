@@ -45,6 +45,8 @@ interface Props {
   /** Machines a spare part can be linked to. Empty for the products page. */
   machines: Item[];
   onHand: Record<string, number>;
+  /** Cost and margin are shown only to roles that may see what things cost. */
+  showCost: boolean;
   currency: CurrencyCode;
   defaultTaxRate: number;
   locale: string;
@@ -88,6 +90,7 @@ export function ItemsClient({
   categories,
   machines,
   onHand,
+  showCost,
   currency,
   defaultTaxRate,
   locale,
@@ -328,15 +331,19 @@ export function ItemsClient({
                     <th className="h-10 px-4 text-end text-2xs font-medium text-muted w-[90px]">
                       {t("label.onHand")}
                     </th>
-                    <th className="h-10 px-4 text-end text-2xs font-medium text-muted hidden xl:table-cell w-[90px]">
-                      {t("label.cost")}
-                    </th>
+                    {showCost && (
+                      <th className="h-10 px-4 text-end text-2xs font-medium text-muted hidden xl:table-cell w-[90px]">
+                        {t("label.cost")}
+                      </th>
+                    )}
                     <th className="h-10 px-4 text-end text-2xs font-medium text-muted w-[100px]">
                       {t("label.price")}
                     </th>
-                    <th className="h-10 px-4 text-end text-2xs font-medium text-muted hidden xl:table-cell w-[70px]">
-                      {t("label.margin")}
-                    </th>
+                    {showCost && (
+                      <th className="h-10 px-4 text-end text-2xs font-medium text-muted hidden xl:table-cell w-[70px]">
+                        {t("label.margin")}
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -424,19 +431,23 @@ export function ItemsClient({
                             </Num>
                           </Dot>
                         </td>
-                        <td className="py-2.5 px-4 align-middle text-end hidden xl:table-cell">
-                          <Num className="text-muted">{money(item.cost)}</Num>
-                        </td>
+                        {showCost && (
+                          <td className="py-2.5 px-4 align-middle text-end hidden xl:table-cell">
+                            <Num className="text-muted">{money(item.cost)}</Num>
+                          </td>
+                        )}
                         <td className="py-2.5 px-4 align-middle text-end">
                           <Num className="font-medium">{money(item.price)}</Num>
                         </td>
-                        <td className="py-2.5 px-4 align-middle text-end hidden xl:table-cell">
-                          <Num className="text-muted text-2xs">
-                            {item.price > 0
-                              ? `${(((item.price - item.cost) / item.price) * 100).toFixed(0)}%`
-                              : "—"}
-                          </Num>
-                        </td>
+                        {showCost && (
+                          <td className="py-2.5 px-4 align-middle text-end hidden xl:table-cell">
+                            <Num className="text-muted text-2xs">
+                              {item.price > 0
+                                ? `${(((item.price - item.cost) / item.price) * 100).toFixed(0)}%`
+                                : "—"}
+                            </Num>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -799,9 +810,11 @@ export function ItemsClient({
             </DrawerSection>
 
             <DrawerSection title={t("label.price")}>
-              <DetailRow label={t("label.cost")}>
-                <Num>{money(viewing.cost)}</Num>
-              </DetailRow>
+              {showCost && (
+                <DetailRow label={t("label.cost")}>
+                  <Num>{money(viewing.cost)}</Num>
+                </DetailRow>
+              )}
               {viewing.itemType === "product" && (
                 <DetailRow label={t("label.price")}>
                   <Num className="font-semibold">{money(viewing.price)}</Num>

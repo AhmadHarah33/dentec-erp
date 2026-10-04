@@ -3,13 +3,14 @@ import { snapshot } from "@/lib/data/repository";
 import { getI18n } from "@/lib/i18n/server";
 import { PurchaseDetailClient } from "./purchase-detail-client";
 import { requireAccess } from "@/lib/auth/server";
+import { withoutCost } from "@/lib/permissions";
 
 export default async function PurchaseDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireAccess("purchasing", "view");
+  const member = await requireAccess("purchasing", "view");
   const { id } = await params;
   const { locale } = await getI18n();
   const db = await snapshot();
@@ -23,7 +24,7 @@ export default async function PurchaseDetailPage({
   const warehouse = db.warehouses.find((w) => w.id === order.warehouseId);
   if (!warehouse) notFound();
 
-  const items = db.items;
+  const items = withoutCost(db.items, member.role);
   const settings = db.settings;
 
   // Orders drafted to un-block a service job carry the link back to it.

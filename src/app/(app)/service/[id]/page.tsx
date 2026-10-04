@@ -5,13 +5,14 @@ import { buildStockIndex, onHand } from "@/lib/stock";
 import { jobShortages } from "@/lib/service";
 import { JobClient } from "./job-client";
 import { requireAccess } from "@/lib/auth/server";
+import { withoutCost } from "@/lib/permissions";
 
 export default async function JobPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireAccess("service", "view");
+  const member = await requireAccess("service", "view");
   const { id } = await params;
   const { locale } = await getI18n();
   const db = await snapshot();
@@ -55,7 +56,7 @@ export default async function JobPage({
       customer={db.customers.find((c) => c.id === job.customerId)}
       shortages={shortages}
       invoice={invoice ? { id: invoice.id, number: invoice.number } : null}
-      items={db.items}
+      items={withoutCost(db.items, member.role)}
       users={db.users}
       warehouses={db.warehouses}
       currency={db.settings.baseCurrency}

@@ -4,13 +4,14 @@ import { buildStockIndex, onHand } from "@/lib/stock";
 import { DocumentEditor } from "@/components/app/document-editor";
 import { blankDoc } from "@/lib/doc-defaults";
 import { requireAccess } from "@/lib/auth/server";
+import { withoutCost } from "@/lib/permissions";
 
 export default async function NewInvoicePage({
   searchParams,
 }: {
   searchParams: Promise<{ customer?: string }>;
 }) {
-  await requireAccess("invoices", "limited");
+  const member = await requireAccess("invoices", "limited");
   const { customer } = await searchParams;
   const { locale } = await getI18n();
   const db = await snapshot();
@@ -33,7 +34,7 @@ export default async function NewInvoicePage({
       parties={db.customers
         .filter((c) => c.active)
         .map((c) => ({ id: c.id, name: c.name }))}
-      items={db.items.filter((i) => i.active)}
+      items={withoutCost(db.items.filter((i) => i.active), member.role)}
       warehouses={db.warehouses.filter((w) => w.active)}
       settings={db.settings}
       onHand={stock}

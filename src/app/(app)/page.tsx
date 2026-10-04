@@ -1,7 +1,7 @@
 import { snapshot } from "@/lib/data/repository";
 import { getI18n } from "@/lib/i18n/server";
 import { requireMember } from "@/lib/auth/server";
-import { can, dashboardFocus, type Area, type Level } from "@/lib/permissions";
+import { can, dashboardFocus, seesCost, type Area, type Level } from "@/lib/permissions";
 import { buildStockIndex, lowStock, stockValue } from "@/lib/stock";
 import {
   invoiceOutstanding,
@@ -446,12 +446,14 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
               value={compact(receivables)}
               href="/accounting"
             />
-            <KpiTile
-              label={t("dash.stockValue")}
-              value={compact(stockTotal)}
-              meta={t("dash.atStandardCost")}
-              href="/inventory"
-            />
+            {seesCost(member.role) && (
+              <KpiTile
+                label={t("dash.stockValue")}
+                value={compact(stockTotal)}
+                meta={t("dash.atStandardCost")}
+                href="/inventory"
+              />
+            )}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -511,11 +513,13 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
         <>
           <h2 className="text-sm font-semibold mb-4">{t("dash.performance")}</h2>
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-            <KpiTile
-              label={t("dash.stockValue")}
-              value={compact(stockTotal)}
-              meta={t("dash.atStandardCost")}
-            />
+            {seesCost(member.role) && (
+              <KpiTile
+                label={t("dash.stockValue")}
+                value={compact(stockTotal)}
+                meta={t("dash.atStandardCost")}
+              />
+            )}
             <KpiTile label={t("dash.pendingPurchases")} value={count(pendingPOs.length)} />
             <KpiTile label={t("service.delivered")} value={count(deliveredThisMonth)} />
           </div>

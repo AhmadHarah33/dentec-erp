@@ -23,15 +23,22 @@ import type { Role, User } from "@/lib/data/types";
 import { can, type Area, type Level } from "@/lib/permissions";
 import type { MessageKey } from "@/lib/i18n";
 import { SESSION_COOKIE } from "./cookie";
-import { dummyPasswordHash, hashPassword, newToken, tokenId, verifyPassword } from "./crypto";
+import { Busy, dummyPasswordHash, hashPassword, MAX_PASSWORD, newToken, tokenId, verifyPassword } from "./crypto";
+import { clear, clientIp, hit, keyPart } from "./limits";
 
 /** A session lasts this long without use; using it pushes the expiry forward. */
 const SESSION_DAYS = 14;
 /** Write "last seen" at most this often, not on every request. */
 const TOUCH_MS = 60 * 60 * 1000;
-/** Throttling: this many wrong passwords in a row lock the account for LOCK_MINUTES. */
-const MAX_FAILURES = 5;
-const LOCK_MINUTES = 15;
+/**
+ * Sign-in budget. Not an account lock — that lets anyone who knows an email
+ * address lock its owner out for good. Attempts are counted per (address,
+ * client) and per client, so an attacker only ever spends their own budget.
+ */
+const PAIR_ATTEMPTS = 5;
+const CLIENT_ATTEMPTS = 30;
+const ATTEMPT_WINDOW_SECONDS = 15 * 60;
+const MAX_EMAIL = 200;
 
 export interface Member {
   user: User;
@@ -116,45 +123,61 @@ export const currentMember = cache(async (): Promise<Member | null> => {
 export type SignInFailure = "invalid" | "locked";
 
 /**
- * Check an email and password. Wrong email and wrong password take the same
- * time and give the same answer, so the form cannot be used to find out who
- * has an account.
+ * Check an email and password.
+ *
+ * Nothing here may differ between an address that has an account and one that
+ * does not: the attempt budget is spent on whatever address was typed, a
+ * missing account still pays for a hash, and "too many attempts" is the same
+ * answer for both. Otherwise the form is a way to list who works here.
+ *
+ * The budget is spent BEFORE the password is checked, in one atomic step. If
+ * it were counted after a failure, fifty parallel requests would all find the
+ * counter at zero and get fifty guesses.
  */
 export async function checkPassword(
   email: string,
   password: string,
 ): Promise<{ ok: true; user: User } | { ok: false; reason: SignInFailure }> {
-  const address = email.trim().toLowerCase();
-  const db = await snapshot();
-  const user = db.users.find((u) => u.active && u.email.trim().toLowerCase() === address);
-  const sql = database();
-  const [cred] = user
-    ? await sql`select password_hash, failed_attempts, locked_until from erp.credentials where user_id = ${user.id}`
-    : [];
+  const address = email.trim().toLowerCase().slice(0, MAX_EMAIL);
+  const ip = await clientIp();
+  const pairKey = `login:pair:${keyPart(address)}:${keyPart(ip)}`;
 
-  if (!user || !cred) {
-    await verifyPassword(password, await dummyPasswordHash());
-    return { ok: false, reason: "invalid" };
-  }
-  if (cred.locked_until && new Date(cred.locked_until as string) > new Date()) {
-    return { ok: false, reason: "locked" };
-  }
+  const [pairAllowed, clientAllowed] = await Promise.all([
+    hit(pairKey, PAIR_ATTEMPTS, ATTEMPT_WINDOW_SECONDS),
+    hit(`login:ip:${keyPart(ip)}`, CLIENT_ATTEMPTS, ATTEMPT_WINDOW_SECONDS),
+  ]);
+  if (!pairAllowed || !clientAllowed) return { ok: false, reason: "locked" };
 
-  if (!(await verifyPassword(password, cred.password_hash as string))) {
-    const failures = (cred.failed_attempts as number) + 1;
-    const lock = failures >= MAX_FAILURES ? new Date(Date.now() + LOCK_MINUTES * 60 * 1000).toISOString() : null;
+  // Nobody has a password this long; refusing it keeps megabytes out of the hasher.
+  if (!address || password.length > MAX_PASSWORD) return { ok: false, reason: "invalid" };
+
+  try {
+    const db = await snapshot();
+    const user = db.users.find((u) => u.active && u.email.trim().toLowerCase() === address);
+    const sql = database();
+    const [cred] = user
+      ? await sql`select password_hash from erp.credentials where user_id = ${user.id}`
+      : [];
+
+    if (!user || !cred) {
+      await verifyPassword(password, await dummyPasswordHash());
+      return { ok: false, reason: "invalid" };
+    }
+    if (!(await verifyPassword(password, cred.password_hash as string))) {
+      return { ok: false, reason: "invalid" };
+    }
+
+    await clear(pairKey);
     await sql`
       update erp.credentials
-      set failed_attempts = ${lock ? 0 : failures}, locked_until = ${lock}::timestamptz
+      set failed_attempts = 0, locked_until = null, last_sign_in_at = now()
       where user_id = ${user.id}`;
-    return { ok: false, reason: lock ? "locked" : "invalid" };
+    return { ok: true, user };
+  } catch (err) {
+    // Too many hashes in flight: the same "wait and try again" as a spent budget.
+    if (err instanceof Busy) return { ok: false, reason: "locked" };
+    throw err;
   }
-
-  await sql`
-    update erp.credentials
-    set failed_attempts = 0, locked_until = null, last_sign_in_at = now()
-    where user_id = ${user.id}`;
-  return { ok: true, user };
 }
 
 /** Set (or replace) a person's password. Ends their other sessions. */

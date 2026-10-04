@@ -33,12 +33,14 @@ export function MovesClient({
   moves,
   items,
   warehouses,
+  showCost,
   currency,
   locale,
 }: {
   moves: StockMove[];
   items: Item[];
   warehouses: Warehouse[];
+  showCost: boolean;
   currency: CurrencyCode;
   locale: string;
 }) {
@@ -163,7 +165,7 @@ export function MovesClient({
 
       <DataTable
         rows={rows}
-        columns={columns}
+        columns={showCost ? columns : columns.filter((c) => c.key !== "cost")}
         rowKey={(r) => r.id}
         pageSize={40}
         emptyTitle={t("empty.moves")}

@@ -71,6 +71,14 @@ npx tsc --noEmit       # must be silent before you call anything done
 
 ## Scope boundaries
 
-There is no authentication. Roles are organisational only. Do not add auth
-plumbing unless asked — it is planned to arrive with Supabase. The `ViewRole`
-cookie is a display preference and must not grow into a permission system.
+The ERP authenticates its own users (`src/lib/auth/`): scrypt passwords,
+hashed session cookies, invitation and reset links, roles enforced server-side
+through `src/lib/permissions.ts`. Every server action calls `guard()`; every
+page calls `requireAccess()`. Cost, margin and stock value are stripped on the
+server for roles that may not see them (`seesCost` / `withoutCost`).
+
+- Server actions read only named, validated fields (`src/lib/inputs.ts`) —
+  never spread the browser's object into a row — and run their state checks
+  inside the `transaction()` that writes.
+- Sign-in and "forgot password" are rate-limited per client in Postgres
+  (`src/lib/auth/limits.ts`); there is deliberately no per-account lockout.

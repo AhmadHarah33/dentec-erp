@@ -13,11 +13,52 @@ const P = 1;
 const KEYLEN = 64;
 const MAXMEM = 128 * N * R * 2;
 
+/** The longest password that is hashed. Longer is refused before any work is done. */
+export const MAX_PASSWORD = 128;
+
+/**
+ * scrypt runs on libuv's four-thread pool and takes 32 MB per run. Unbounded,
+ * a flood of sign-in attempts fills that pool and memory and stalls every
+ * other thing the process does (DNS, the database driver). At most
+ * MAX_CONCURRENT run at once, MAX_QUEUE wait, and the rest are turned away.
+ */
+const MAX_CONCURRENT = 2;
+const MAX_QUEUE = 16;
+let running = 0;
+const waiting: (() => void)[] = [];
+
+/** Too many hashes in flight; the caller should say "try again later". */
+export class Busy extends Error {
+  constructor() {
+    super("password hashing is busy");
+  }
+}
+
+async function withSlot<T>(fn: () => Promise<T>): Promise<T> {
+  if (running >= MAX_CONCURRENT) {
+    if (waiting.length >= MAX_QUEUE) throw new Busy();
+    // The slot is handed over directly, so `running` stays where it is.
+    await new Promise<void>((resolve) => waiting.push(resolve));
+  } else {
+    running++;
+  }
+  try {
+    return await fn();
+  } finally {
+    const next = waiting.shift();
+    if (next) next();
+    else running--;
+  }
+}
+
 function derive(password: string, salt: Buffer, n = N, r = R, p = P): Promise<Buffer> {
-  return new Promise((resolve, reject) =>
-    scrypt(password.normalize("NFKC"), salt, KEYLEN, { N: n, r, p, maxmem: MAXMEM }, (err, key) =>
-      err ? reject(err) : resolve(key),
-    ),
+  return withSlot(
+    () =>
+      new Promise<Buffer>((resolve, reject) =>
+        scrypt(password.normalize("NFKC"), salt, KEYLEN, { N: n, r, p, maxmem: MAXMEM }, (err, key) =>
+          err ? reject(err) : resolve(key),
+        ),
+      ),
   );
 }
 

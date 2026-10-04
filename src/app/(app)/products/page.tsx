@@ -3,9 +3,10 @@ import { getI18n } from "@/lib/i18n/server";
 import { buildStockIndex, onHand } from "@/lib/stock";
 import { ItemsClient } from "@/components/app/items-client";
 import { requireAccess } from "@/lib/auth/server";
+import { seesCost, withoutCost } from "@/lib/permissions";
 
 export default async function ProductsPage() {
-  await requireAccess("catalog", "view");
+  const member = await requireAccess("catalog", "view");
   const { locale, t } = await getI18n();
   const db = await snapshot();
   const index = buildStockIndex(db.stockMoves);
@@ -20,7 +21,8 @@ export default async function ProductsPage() {
       title={t("page.products.title")}
       subtitle={t("page.products.subtitle")}
       newLabel={t("page.products.new")}
-      items={items}
+      items={withoutCost(items, member.role)}
+      showCost={seesCost(member.role)}
       categories={db.categories}
       machines={[]}
       onHand={stock}

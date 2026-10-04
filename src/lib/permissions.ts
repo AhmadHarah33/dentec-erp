@@ -110,6 +110,23 @@ export const MATRIX: Record<Role, Record<Area, Level>> = {
   },
 };
 
+/**
+ * Who may see what things cost Dentec: standard cost, margin, stock value,
+ * landed cost. The same people who get the full reports (owner, accountant,
+ * viewer); sales, technicians and the service lead get the cost-free view.
+ */
+export function seesCost(role: Role): boolean {
+  return can(role, "reports", "edit");
+}
+
+/**
+ * Items as `role` may see them. Cost is zeroed on the server, before the data
+ * is serialised: hiding a column still ships the numbers to the browser.
+ */
+export function withoutCost<T extends { cost: number }>(items: T[], role: Role): T[] {
+  return seesCost(role) ? items : items.map((item) => ({ ...item, cost: 0 }));
+}
+
 export function levelOf(role: Role, area: Area): Level {
   return MATRIX[role]?.[area] ?? "none";
 }
