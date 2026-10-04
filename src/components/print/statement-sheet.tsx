@@ -12,6 +12,10 @@ import { formatDate } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import type { Statement } from "@/lib/statement";
 
+/** Cell spacing: padded between columns, flush at the table's outer edges (see the invoice sheet). */
+const CELL = "py-1.5 px-1.5 first:ps-0 last:pe-0";
+const HEAD = "font-medium py-1.5 px-1.5 first:ps-0 last:pe-0 leading-tight";
+
 function N({ children }: { children: React.ReactNode }) {
   return <span className="num">{children}</span>;
 }
@@ -74,31 +78,39 @@ export function StatementSheet({
         )}
       </section>
 
-      <table className="w-full mt-4 text-2xs border-collapse">
+      {/* Fixed layout: the document column takes what the three amount columns leave. */}
+      <table className="w-full mt-4 text-2xs border-collapse table-fixed">
+        <colgroup>
+          <col className="w-[26mm]" />
+          <col />
+          <col className="w-[33mm]" />
+          <col className="w-[33mm]" />
+          <col className="w-[33mm]" />
+        </colgroup>
         <thead>
-          <tr className="border-b border-ink/40 text-muted">
-            <th className="text-start font-medium py-1.5">{t("label.date")}</th>
-            <th className="text-start font-medium py-1.5">{t("statement.document")}</th>
-            <th className="text-end font-medium py-1.5">{t("statement.debit")}</th>
-            <th className="text-end font-medium py-1.5">{t("statement.credit")}</th>
-            <th className="text-end font-medium py-1.5">{t("label.balance")}</th>
+          <tr className="border-b border-ink/40 text-muted align-bottom">
+            <th className={`${HEAD} text-start`}>{t("label.date")}</th>
+            <th className={`${HEAD} text-start`}>{t("statement.document")}</th>
+            <th className={`${HEAD} text-end`}>{t("statement.debit")}</th>
+            <th className={`${HEAD} text-end`}>{t("statement.credit")}</th>
+            <th className={`${HEAD} text-end`}>{t("label.balance")}</th>
           </tr>
         </thead>
         <tbody>
           <tr className="border-b border-line bg-sunken/40">
-            <td className="py-1.5" colSpan={4}>
+            <td className={CELL} colSpan={4}>
               {t("statement.opening")}
             </td>
-            <td className="py-1.5 text-end font-medium">
+            <td className={`${CELL} text-end font-medium whitespace-nowrap`}>
               <N>{money(statement.opening)}</N>
             </td>
           </tr>
           {statement.rows.map((r, i) => (
             <tr key={i} className="border-b border-line align-top">
-              <td className="py-1.5">
+              <td className={`${CELL} whitespace-nowrap`}>
                 <N>{formatDate(r.date, locale)}</N>
               </td>
-              <td className="py-1.5">
+              <td className={`${CELL} break-words`}>
                 {r.kind === "invoice" ? (
                   <>
                     {t("statement.invoice")} <N>{r.ref}</N>
@@ -116,9 +128,9 @@ export function StatementSheet({
                   </>
                 )}
               </td>
-              <td className="py-1.5 text-end">{r.debit ? <N>{money(r.debit)}</N> : "—"}</td>
-              <td className="py-1.5 text-end">{r.credit ? <N>{money(r.credit)}</N> : "—"}</td>
-              <td className="py-1.5 text-end font-medium">
+              <td className={`${CELL} text-end whitespace-nowrap`}>{r.debit ? <N>{money(r.debit)}</N> : "—"}</td>
+              <td className={`${CELL} text-end whitespace-nowrap`}>{r.credit ? <N>{money(r.credit)}</N> : "—"}</td>
+              <td className={`${CELL} text-end font-medium whitespace-nowrap`}>
                 <N>{money(r.balance)}</N>
               </td>
             </tr>
@@ -133,16 +145,16 @@ export function StatementSheet({
         </tbody>
         <tfoot>
           <tr className="border-t border-ink/40 font-semibold">
-            <td className="py-2" colSpan={2}>
+            <td className="py-2 px-1.5 first:ps-0 last:pe-0" colSpan={2}>
               {t("statement.closing")}
             </td>
-            <td className="py-2 text-end">
+            <td className="py-2 px-1.5 text-end whitespace-nowrap">
               <N>{money(statement.totalDebit)}</N>
             </td>
-            <td className="py-2 text-end">
+            <td className="py-2 px-1.5 text-end whitespace-nowrap">
               <N>{money(statement.totalCredit)}</N>
             </td>
-            <td className="py-2 text-end">
+            <td className="py-2 px-1.5 last:pe-0 text-end whitespace-nowrap">
               <N>{money(statement.closing)}</N>
             </td>
           </tr>
