@@ -8,7 +8,9 @@ export default async function LoginPage({
   searchParams: Promise<{ next?: string }>;
 }) {
   // Already in: the login page has nothing to offer.
-  if (await currentMember()) redirect("/");
+  // A stale cookie plus an unreachable database must not take the sign-in page down with it.
+  const member = await currentMember().catch(() => null);
+  if (member) redirect("/");
   const { next } = await searchParams;
   return <LoginClient next={next ?? "/"} />;
 }

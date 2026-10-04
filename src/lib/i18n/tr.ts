@@ -515,6 +515,7 @@ const tr: Record<MessageKey, string> = {
   "auth.passwordShort": "Şifre en az 10 karakter olmalı",
   "invoice.overpay": "Tutar, faturanın kalan bakiyesini aşıyor",
   "demo.banner": "Demo sürümü — tüm veriler örnektir",
+  "auth.unavailable": "Hizmet geçici olarak kullanılamıyor. Lütfen biraz sonra tekrar deneyin.",
   "auth.passwordLong": "Şifre çok uzun (en fazla 128 karakter)",
   "auth.linkInvalid": "Bağlantı geçersiz veya süresi dolmuş. Yöneticiden yeni bir bağlantı isteyin.",
   "auth.passwordRejected": "Şifre kaydedilemedi",
