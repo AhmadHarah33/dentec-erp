@@ -1,0 +1,12 @@
+node_modules
+.next
+.next-build
+.git
+.claude
+docs
+data
+.env*
+*.tsbuildinfo
+.check-out
+deploy
+supabase
