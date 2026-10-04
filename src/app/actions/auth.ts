@@ -16,7 +16,7 @@ function safeNext(next: string | null | undefined): string {
   return next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
 }
 
-export async function signIn(email: string, password: string, next?: string): Promise<Result<string>> {
+async function signInImpl(email: string, password: string, next?: string): Promise<Result<string>> {
   // Types are erased at the boundary; a non-string would throw below.
   if (typeof email !== "string" || typeof password !== "string") return fail("auth.invalid");
   if (!email.trim() || !password) return fail("msg.requiredField");
@@ -41,7 +41,7 @@ export async function signOut(): Promise<void> {
  * link is opened — mail scanners open links to check them, and spending on
  * open would burn the token before the person ever saw the page.
  */
-export async function acceptLink(
+async function acceptLinkImpl(
   type: "invite" | "recovery",
   token: string,
   password: string,
@@ -76,7 +76,7 @@ export async function acceptLink(
  * addresses are being asked about. Without a limit this is a way to fill
  * someone's inbox.
  */
-export async function requestReset(email: string): Promise<Result<"sent">> {
+async function requestResetImpl(email: string): Promise<Result<"sent">> {
   if (!mailEnabled()) return fail("auth.noMailer");
   if (typeof email !== "string") return fail("msg.requiredField");
   const address = email.trim().toLowerCase().slice(0, 200);
@@ -105,4 +105,36 @@ export async function requestReset(email: string): Promise<Result<"sent">> {
     }
   });
   return ok("sent");
+}
+
+/* ------------------------------------------------------------------ */
+/* Public actions                                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * These are the screens a person reaches before they are signed in, so when
+ * the database is down or misconfigured they must say so — not throw, which
+ * ends in a bare "Application error" page that tells the person nothing and
+ * gives no way to try again. The cause is logged in full for whoever reads
+ * the server logs.
+ */
+async function whenAvailable<T>(what: string, body: () => Promise<Result<T>>): Promise<Result<T>> {
+  try {
+    return await body();
+  } catch (error) {
+    console.error(`[auth] ${what} failed:`, error instanceof Error ? error.message : error);
+    return fail("auth.unavailable");
+  }
+}
+
+export async function signIn(...args: Parameters<typeof signInImpl>): ReturnType<typeof signInImpl> {
+  return whenAvailable("sign-in", () => signInImpl(...args));
+}
+
+export async function acceptLink(...args: Parameters<typeof acceptLinkImpl>): ReturnType<typeof acceptLinkImpl> {
+  return whenAvailable("accepting a link", () => acceptLinkImpl(...args));
+}
+
+export async function requestReset(...args: Parameters<typeof requestResetImpl>): ReturnType<typeof requestResetImpl> {
+  return whenAvailable("password reset request", () => requestResetImpl(...args));
 }
