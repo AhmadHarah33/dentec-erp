@@ -4,12 +4,14 @@ import { getI18n } from "@/lib/i18n/server";
 import { paidForInvoice } from "@/lib/queries";
 import { localName } from "@/lib/labels";
 import { InvoiceDetailClient } from "./invoice-detail-client";
+import { requireAccess } from "@/lib/auth/server";
 
 export default async function InvoicePage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireAccess("invoices", "view");
   const { id } = await params;
   const { locale } = await getI18n();
   const db = await snapshot();
@@ -28,6 +30,7 @@ export default async function InvoicePage({
       name: item ? localName(item, locale) : line.description,
       sku: item?.sku ?? "",
       unit: item?.unit ?? "piece",
+      tracksSerial: item?.tracksSerial === true,
     };
   });
 

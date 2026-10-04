@@ -166,16 +166,6 @@ const TONES: Record<Tone, string> = {
   muted: "bg-transparent text-faint border-line",
 };
 
-/** A tone as a tinted square, for the icon on a KPI tile. */
-export const TONE_TINT: Record<Tone, string> = {
-  neutral: "bg-sunken text-muted",
-  accent: "bg-accent-soft text-accent",
-  success: "bg-success-soft text-success",
-  danger: "bg-danger-soft text-danger",
-  warn: "bg-warn-soft text-warn",
-  muted: "bg-sunken text-faint",
-};
-
 export function Badge({
   tone = "neutral",
   children,

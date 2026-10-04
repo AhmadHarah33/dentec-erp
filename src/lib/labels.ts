@@ -87,14 +87,15 @@ export const EXPENSE_CATEGORIES: ExpenseCategory[] = [
 ];
 export const UNITS: Item["unit"][] = ["piece", "box", "set", "meter", "kg", "liter"];
 export const PARTY_KINDS = ["clinic", "hospital", "lab", "dealer", "other"] as const;
-export const ROLES = ["owner", "accountant", "sales", "technician", "viewer"] as const;
+export const ROLES = ["owner", "accountant", "sales", "technician", "service_lead", "viewer"] as const;
 export const PAYMENT_METHODS = ["cash", "bank", "cheque", "card"] as const;
 
 export function invoiceKey(s: InvoiceStatus): MessageKey {
   return `status.${s}` as MessageKey;
 }
 export function purchaseKey(s: PurchaseStatus): MessageKey {
-  return `status.${s}` as MessageKey;
+  // "partial" on an invoice means partly paid; on a purchase order, partly received.
+  return (s === "partial" ? "status.partialReceived" : `status.${s}`) as MessageKey;
 }
 export function serviceKey(s: ServiceStatus): MessageKey {
   return `service.${s}` as MessageKey;

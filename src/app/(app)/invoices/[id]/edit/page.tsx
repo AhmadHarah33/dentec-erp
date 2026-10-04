@@ -3,12 +3,15 @@ import { snapshot } from "@/lib/data/repository";
 import { getI18n } from "@/lib/i18n/server";
 import { buildStockIndex, onHand } from "@/lib/stock";
 import { DocumentEditor } from "@/components/app/document-editor";
+import { requireAccess } from "@/lib/auth/server";
+import { withoutCost } from "@/lib/permissions";
 
 export default async function EditInvoicePage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const member = await requireAccess("invoices", "limited");
   const { id } = await params;
   const { locale } = await getI18n();
   const db = await snapshot();
@@ -42,7 +45,7 @@ export default async function EditInvoicePage({
         notes: invoice.notes,
       }}
       parties={db.customers.map((c) => ({ id: c.id, name: c.name }))}
-      items={db.items.filter((i) => i.active)}
+      items={withoutCost(db.items.filter((i) => i.active), member.role)}
       warehouses={db.warehouses.filter((w) => w.active)}
       settings={db.settings}
       onHand={stock}

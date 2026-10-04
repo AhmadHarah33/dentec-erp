@@ -4,6 +4,7 @@ import "./globals.css";
 import { dirFor } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n/server";
 import { LocaleProvider } from "@/lib/i18n/context";
+import { ToastProvider } from "@/components/ui/toast";
 
 /**
  * Cairo: drawn for Arabic first, with a Latin companion and the Turkish
@@ -41,7 +42,9 @@ export default async function RootLayout({
   return (
     <html lang={locale} dir={dirFor(locale)} className={cairo.variable}>
       <body className="font-sans antialiased">
-        <LocaleProvider locale={locale}>{children}</LocaleProvider>
+        <LocaleProvider locale={locale}>
+          <ToastProvider>{children}</ToastProvider>
+        </LocaleProvider>
       </body>
     </html>
   );

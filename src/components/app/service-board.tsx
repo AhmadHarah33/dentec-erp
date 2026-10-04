@@ -77,6 +77,7 @@ export function ServiceBoard({
   users,
   shortages,
   showDelivered,
+  readOnly = false,
 }: {
   jobs: ServiceJob[];
   customers: Customer[];
@@ -84,6 +85,8 @@ export function ServiceBoard({
   /** Job id → how many distinct parts it is short. */
   shortages: Record<string, number>;
   showDelivered: boolean;
+  /** For roles that may look but not move: no drag, no move menu. */
+  readOnly?: boolean;
 }) {
   const { t, locale } = useLocale();
   const [, startTransition] = useTransition();
@@ -134,6 +137,7 @@ export function ServiceBoard({
   }
 
   function handlePointerDown(e: React.PointerEvent, job: ServiceJob) {
+    if (readOnly) return;
     // Touch keeps the explicit move menu as its only path — a column row
     // scrolls horizontally on a phone, and a card that also claims touch
     // gestures would fight that scroll.
@@ -339,19 +343,17 @@ export function ServiceBoard({
                 over === status ? "border-accent bg-accent-soft/50" : "border-line",
               )}
             >
-              <div className="p-3 pb-2">
-                <div className={cn("h-1 rounded-full mb-2.5", COLUMN_BAR[status])} />
-                <div className="flex items-center gap-2">
-                  <h3 className="text-2xs font-semibold truncate">{t(serviceKey(status))}</h3>
-                  <span className="text-2xs text-faint shrink-0">
-                    <Num>{formatNumber(cards.length, locale, 0)}</Num>
-                  </span>
-                </div>
+              <div className="flex items-center gap-2 h-11 px-3">
+                <span className={cn("size-2 rounded-full shrink-0", COLUMN_BAR[status])} />
+                <h3 className="text-xs font-semibold truncate">{t(serviceKey(status))}</h3>
+                <span className="ms-auto text-2xs font-semibold text-muted bg-surface border border-line rounded-full px-2 h-5 grid place-items-center shrink-0">
+                  <Num>{formatNumber(cards.length, locale, 0)}</Num>
+                </span>
               </div>
 
               {/* A tall column even when empty: a 0-item stage still has to be a
                   drop target big enough to aim a dragged card at. */}
-              <div className="px-2 pb-2 flex flex-col gap-2 min-h-[350px]">
+              <div className="px-2 pb-2 flex flex-col gap-2 min-h-[260px]">
                 {cards.length === 0 ? (
                   <div
                     className={cn(
@@ -379,6 +381,7 @@ export function ServiceBoard({
                       }}
                       onPointerDown={(e) => handlePointerDown(e, job)}
                       onMove={move}
+                      readOnly={readOnly}
                     />
                   ))
                 )}
@@ -410,6 +413,7 @@ function JobCard({
   cardRef,
   onPointerDown,
   onMove,
+  readOnly,
 }: {
   job: ServiceJob;
   customers: Customer[];
@@ -419,6 +423,7 @@ function JobCard({
   cardRef: (el: HTMLDivElement | null) => void;
   onPointerDown: (e: React.PointerEvent) => void;
   onMove: (id: string, status: ServiceStatus) => void;
+  readOnly: boolean;
 }) {
   const { t, locale } = useLocale();
   const [menu, setMenu] = useState(false);
@@ -432,11 +437,14 @@ function JobCard({
       ref={cardRef}
       onPointerDown={onPointerDown}
       className={cn(
-        "relative bg-surface border border-line rounded-sm p-3 flex flex-col gap-2",
+        "relative bg-surface border border-line rounded-sm p-3 flex flex-col gap-2.5",
         "select-none touch-pan-y",
         dragging
           ? "shadow-pop cursor-grabbing"
-          : "shadow-card hover:shadow-pop transition-shadow duration-[var(--dur-swift)] lg:cursor-grab",
+          : cn(
+              "shadow-card hover:shadow-pop transition-shadow duration-[var(--dur-swift)]",
+              !readOnly && "lg:cursor-grab",
+            ),
       )}
     >
       <div className="flex items-start gap-2">
@@ -444,35 +452,34 @@ function JobCard({
           href={"/service/" + job.id}
           className="min-w-0 flex-1 hover:text-accent transition-colors"
         >
-          <div className="text-xs font-semibold truncate">{job.machineLabel || customer}</div>
+          <div className="text-xs font-semibold leading-snug line-clamp-2">{job.machineLabel || customer}</div>
           <div className="text-2xs text-muted truncate">{customer}</div>
         </Link>
         {/* Touch has no drag, so every card also carries an explicit move menu. */}
-        <button
+        {!readOnly && (
+<button
           type="button"
           onClick={() => setMenu((m) => !m)}
           aria-haspopup="menu"
           aria-expanded={menu}
           aria-label={t("service.moveTo")}
-          className="shrink-0 grid place-items-center size-7 -m-1 rounded-sm text-faint hover:text-ink hover:bg-sunken transition-colors"
+          className="shrink-0 grid place-items-center size-8 -m-1.5 rounded-sm text-faint hover:text-ink hover:bg-sunken transition-colors"
         >
           <IconChevronDown size={14} />
         </button>
+)}
       </div>
 
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <span className="text-2xs text-faint">
-          <Num>{job.number}</Num>
-        </span>
-        <span className="text-2xs text-faint">·</span>
-        <span className="text-2xs text-faint">{t("service.daysOpen", { d: countedPhrase(locale, "day", age) })}</span>
+      <div className="flex items-center justify-between gap-x-3 gap-y-0.5 flex-wrap text-2xs text-faint">
+        <Num>{job.number}</Num>
+        <span>{t("service.daysOpen", { d: countedPhrase(locale, "day", age) })}</span>
       </div>
 
       {(short > 0 || job.underWarranty || tech) && (
         <div className="flex items-center gap-1.5 flex-wrap">
           {short > 0 && (
             <Badge tone="warn">
-              <IconAlert size={11} className="me-1" />
+              <IconAlert size={11} className="me-1 shrink-0" />
               {t("service.shortageOf", { n: short })}
             </Badge>
           )}

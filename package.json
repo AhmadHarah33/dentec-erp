@@ -7,22 +7,35 @@
     "build": "next build",
     "start": "next start -p 3000",
     "lint": "next lint",
-    "check": "tsc --outDir .check-out --skipLibCheck --module commonjs --target es2022 --moduleResolution node --strict false --esModuleInterop scripts/check-billing.ts && node .check-out/scripts/check-billing.js"
+    "check": "tsc --outDir .check-out --skipLibCheck --module commonjs --target es2022 --moduleResolution node --strict false --esModuleInterop scripts/check-billing.ts && node .check-out/scripts/check-billing.js",
+    "db:dev": "node --import tsx scripts/dev-db.ts",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "test:store": "tsx scripts/check-store.ts",
+    "test:actions": "tsx scripts/check-actions.ts",
+    "test:import": "tsx scripts/check-import.ts"
   },
   "dependencies": {
     "next": "^15.5.25",
+    "nodemailer": "^7.0.13",
     "playwright": "^1.63.0",
     "playwright-core": "^1.63.0",
+    "postgres": "^3.4.9",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "read-excel-file": "^9.3.10",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite-socket": "^0.2.11",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^26.4.1",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "postcss": "^8.5.27",
     "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3"
   }
 }

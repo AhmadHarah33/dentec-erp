@@ -32,6 +32,8 @@ import { Modal, Confirm } from "@/components/ui/modal";
 import { Drawer, DrawerSection } from "@/components/ui/drawer";
 import { DetailRow } from "@/components/ui/page";
 import { IconPlus, IconSearch, IconTag } from "@/components/ui/icons";
+import { useToast } from "@/components/ui/toast";
+import { useCan } from "@/components/app/member-context";
 
 interface Props {
   itemType: ItemType;
@@ -43,6 +45,8 @@ interface Props {
   /** Machines a spare part can be linked to. Empty for the products page. */
   machines: Item[];
   onHand: Record<string, number>;
+  /** Cost and margin are shown only to roles that may see what things cost. */
+  showCost: boolean;
   currency: CurrencyCode;
   defaultTaxRate: number;
   locale: string;
@@ -68,6 +72,8 @@ function blank(itemType: ItemType, taxRate: number) {
     fitsItemIds: [] as string[],
     notes: "",
     active: true,
+    tracksSerial: false,
+    warrantyMonths: 0,
   };
 }
 
@@ -84,11 +90,15 @@ export function ItemsClient({
   categories,
   machines,
   onHand,
+  showCost,
   currency,
   defaultTaxRate,
   locale,
 }: Props) {
   const t = useT();
+  // Courtesy only: the server action refuses on its own.
+  const canEdit = useCan("catalog", "edit");
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
@@ -178,7 +188,7 @@ export function ItemsClient({
     void id;
     void createdAt;
     void updatedAt;
-    setForm(rest);
+    setForm({ ...rest, tracksSerial: rest.tracksSerial ?? false, warrantyMonths: rest.warrantyMonths ?? 0 });
     setEditing(item);
     setError(null);
     setOpen(true);
@@ -188,7 +198,10 @@ export function ItemsClient({
     setError(null);
     startTransition(async () => {
       const result = await saveItem(editing?.id ?? null, form);
-      if (result.ok) setOpen(false);
+      if (result.ok) {
+        setOpen(false);
+        toast(t("msg.saved"));
+      }
       else setError(t(result.errorKey as MessageKey) + (result.detail ? ` — ${result.detail}` : ""));
     });
   }
@@ -197,7 +210,10 @@ export function ItemsClient({
     if (!confirming) return;
     startTransition(async () => {
       const result = await deleteItem(confirming.id);
-      if (result.ok) setConfirming(null);
+      if (result.ok) {
+        setConfirming(null);
+        toast(t("msg.deleted"));
+      }
       else setError(t(result.errorKey as MessageKey));
     });
   }
@@ -229,7 +245,10 @@ export function ItemsClient({
         appliesTo: categoryForm.appliesTo,
         sortOrder: categories.length,
       });
-      if (result.ok) setAddingCategory(false);
+      if (result.ok) {
+        setAddingCategory(false);
+        toast(t("msg.saved"));
+      }
       else
         setCategoryError(
           t(result.errorKey as MessageKey) + (result.detail ? ` — ${result.detail}` : ""),
@@ -243,10 +262,12 @@ export function ItemsClient({
         title={title}
         subtitle={subtitle}
         actions={
-          <Button variant="primary" onClick={openNew}>
-            <IconPlus />
-            {newLabel}
-          </Button>
+          canEdit && (
+            <Button variant="primary" onClick={openNew}>
+              <IconPlus />
+              {newLabel}
+            </Button>
+          )
         }
       />
 
@@ -310,15 +331,19 @@ export function ItemsClient({
                     <th className="h-10 px-4 text-end text-2xs font-medium text-muted w-[90px]">
                       {t("label.onHand")}
                     </th>
-                    <th className="h-10 px-4 text-end text-2xs font-medium text-muted hidden xl:table-cell w-[90px]">
-                      {t("label.cost")}
-                    </th>
+                    {showCost && (
+                      <th className="h-10 px-4 text-end text-2xs font-medium text-muted hidden xl:table-cell w-[90px]">
+                        {t("label.cost")}
+                      </th>
+                    )}
                     <th className="h-10 px-4 text-end text-2xs font-medium text-muted w-[100px]">
                       {t("label.price")}
                     </th>
-                    <th className="h-10 px-4 text-end text-2xs font-medium text-muted hidden xl:table-cell w-[70px]">
-                      {t("label.margin")}
-                    </th>
+                    {showCost && (
+                      <th className="h-10 px-4 text-end text-2xs font-medium text-muted hidden xl:table-cell w-[70px]">
+                        {t("label.margin")}
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -406,19 +431,23 @@ export function ItemsClient({
                             </Num>
                           </Dot>
                         </td>
-                        <td className="py-2.5 px-4 align-middle text-end hidden xl:table-cell">
-                          <Num className="text-muted">{money(item.cost)}</Num>
-                        </td>
+                        {showCost && (
+                          <td className="py-2.5 px-4 align-middle text-end hidden xl:table-cell">
+                            <Num className="text-muted">{money(item.cost)}</Num>
+                          </td>
+                        )}
                         <td className="py-2.5 px-4 align-middle text-end">
                           <Num className="font-medium">{money(item.price)}</Num>
                         </td>
-                        <td className="py-2.5 px-4 align-middle text-end hidden xl:table-cell">
-                          <Num className="text-muted text-2xs">
-                            {item.price > 0
-                              ? `${(((item.price - item.cost) / item.price) * 100).toFixed(0)}%`
-                              : "—"}
-                          </Num>
-                        </td>
+                        {showCost && (
+                          <td className="py-2.5 px-4 align-middle text-end hidden xl:table-cell">
+                            <Num className="text-muted text-2xs">
+                              {item.price > 0
+                                ? `${(((item.price - item.cost) / item.price) * 100).toFixed(0)}%`
+                                : "—"}
+                            </Num>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -435,7 +464,7 @@ export function ItemsClient({
               title={query ? t("empty.noResults") : t("empty.items")}
               hint={query ? t("empty.noResultsHint") : undefined}
               action={
-                !query && (
+                !query && canEdit && (
                   <Button variant="primary" onClick={openNew}>
                     {newLabel}
                   </Button>
@@ -476,13 +505,12 @@ export function ItemsClient({
           </>
         }
       >
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label={t("label.sku")} required>
             <Input
+              dir="ltr"
               value={form.sku}
               onChange={(e) => setForm({ ...form, sku: e.target.value })}
-              dir="ltr"
-              className="text-start"
             />
           </Field>
           <Field label={t("label.barcode")}>
@@ -490,7 +518,6 @@ export function ItemsClient({
               value={form.barcode}
               onChange={(e) => setForm({ ...form, barcode: e.target.value })}
               dir="ltr"
-              className="text-start"
             />
           </Field>
           <Field label={t("label.nameAr")} required>
@@ -504,7 +531,6 @@ export function ItemsClient({
               value={form.nameTr}
               onChange={(e) => setForm({ ...form, nameTr: e.target.value })}
               dir="ltr"
-              className="text-start"
             />
           </Field>
           <Field label={t("label.category")}>
@@ -537,7 +563,6 @@ export function ItemsClient({
               value={form.brand}
               onChange={(e) => setForm({ ...form, brand: e.target.value })}
               dir="ltr"
-              className="text-start"
             />
           </Field>
           <Field label={t("label.model")}>
@@ -545,7 +570,6 @@ export function ItemsClient({
               value={form.model}
               onChange={(e) => setForm({ ...form, model: e.target.value })}
               dir="ltr"
-              className="text-start"
             />
           </Field>
 
@@ -611,7 +635,7 @@ export function ItemsClient({
                       className="accent-[var(--color-accent)]"
                     />
                     <span className="truncate">{localName(m, locale)}</span>
-                    <Num className="text-2xs text-faint ms-auto">{m.sku}</Num>
+                    <span className="ms-auto"><Num className="text-2xs text-faint">{m.sku}</Num></span>
                   </label>
                 ))}
               </div>
@@ -624,6 +648,33 @@ export function ItemsClient({
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
             />
           </Field>
+
+          {itemType === "product" && (
+            <>
+              <label className="flex items-start gap-2 text-xs cursor-pointer sm:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={form.tracksSerial === true}
+                  onChange={(e) => setForm({ ...form, tracksSerial: e.target.checked })}
+                  className="accent-[var(--color-accent)] mt-0.5"
+                />
+                <span>
+                  {t("serial.track")}
+                  <span className="block text-2xs text-muted">{t("serial.trackHint")}</span>
+                </span>
+              </label>
+              {form.tracksSerial === true && (
+                <Field label={t("serial.warrantyMonths")}>
+                  <NumberInput
+                    min={0}
+                    step={1}
+                    value={form.warrantyMonths ?? 0}
+                    onChange={(e) => setForm({ ...form, warrantyMonths: Math.max(0, Math.floor(Number(e.target.value))) })}
+                  />
+                </Field>
+              )}
+            </>
+          )}
 
           <label className="flex items-center gap-2 text-xs cursor-pointer sm:col-span-2">
             <input
@@ -668,7 +719,6 @@ export function ItemsClient({
               value={categoryForm.nameTr}
               onChange={(e) => setCategoryForm({ ...categoryForm, nameTr: e.target.value })}
               dir="ltr"
-              className="text-start"
             />
           </Field>
           <Field label={t("page.categories.scope")}>
@@ -713,7 +763,7 @@ export function ItemsClient({
           )
         }
         footer={
-          viewing && (
+          viewing && canEdit && (
             <Button
               variant="primary"
               className="w-full"
@@ -760,9 +810,11 @@ export function ItemsClient({
             </DrawerSection>
 
             <DrawerSection title={t("label.price")}>
-              <DetailRow label={t("label.cost")}>
-                <Num>{money(viewing.cost)}</Num>
-              </DetailRow>
+              {showCost && (
+                <DetailRow label={t("label.cost")}>
+                  <Num>{money(viewing.cost)}</Num>
+                </DetailRow>
+              )}
               {viewing.itemType === "product" && (
                 <DetailRow label={t("label.price")}>
                   <Num className="font-semibold">{money(viewing.price)}</Num>

@@ -2,18 +2,25 @@
 
 import { useTransition, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Item, PurchaseOrder, Settings, Supplier, Warehouse } from "@/lib/data/types";
 import { useT } from "@/lib/i18n/context";
+import type { MessageKey } from "@/lib/i18n";
 import { localName, PURCHASE_TONE, purchaseKey } from "@/lib/labels";
 import { formatMoney, computeTotals, toBase } from "@/lib/money";
-import { receiveOrder, cancelOrder } from "@/app/actions/purchasing";
+import { receiveOrder, cancelOrder, deleteOrder } from "@/app/actions/purchasing";
 import { today, formatDate, formatDateTime } from "@/lib/dates";
-import { DetailRow, EmptyState } from "@/components/ui/page";
-import { Badge, Card, CardHeader, Num, LinkButton, Button } from "@/components/ui/primitives";
-import { Confirm } from "@/components/ui/modal";
+import { DetailRow, EmptyState, PageHeader } from "@/components/ui/page";
+import { Badge, Card, CardHeader, Num, NumberInput, LinkButton, Button } from "@/components/ui/primitives";
+import { Confirm, Modal } from "@/components/ui/modal";
+import { round2 } from "@/lib/money";
 import { DownloadPdfButton } from "@/components/app/download-pdf";
+import { useToast } from "@/components/ui/toast";
+import { useCan } from "@/components/app/member-context";
+import { RecordHistory } from "@/components/app/record-history";
 
 export function PurchaseDetailClient({
+  receipts,
   order,
   job,
   supplier,
@@ -22,6 +29,8 @@ export function PurchaseDetailClient({
   settings,
   locale,
 }: {
+  /** Quantity booked in per delivery day, from the stock ledger. */
+  receipts: { date: string; qty: number }[];
   order: PurchaseOrder;
   /** The service job this order was drafted for, when it was. */
   job: { id: string; number: string } | null;
@@ -32,11 +41,24 @@ export function PurchaseDetailClient({
   locale: string;
 }) {
   const t = useT();
+  const canEdit = useCan("purchasing", "edit");
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
   // Fixed at today: a receipt is recorded when the goods arrive.
   const [receiveDate] = useState(today());
+  const remainingOf = (line: PurchaseOrder["lines"][number]) =>
+    Math.max(round2(line.qty - (line.receivedQty ?? 0)), 0);
+  // What this delivery brings, per line; opens pre-filled with everything outstanding.
+  const [arriving, setArriving] = useState<Record<string, string>>({});
+  function openReceive() {
+    setArriving(Object.fromEntries(order.lines.map((l) => [l.id, String(remainingOf(l))])));
+    setReceiveOpen(true);
+  }
 
   const money = (n: number) => formatMoney(n, order.currency, locale);
   const baseMoney = (n: number) => formatMoney(n, settings.baseCurrency, locale);
@@ -46,66 +68,94 @@ export function PurchaseDetailClient({
     [order],
   );
 
-  const canReceive = order.status === "draft" || order.status === "ordered";
-  const canCancel = order.status !== "received" && order.status !== "cancelled";
+  const canReceive = canEdit && (order.status === "draft" || order.status === "ordered" || order.status === "partial");
+  const canCancel =
+    canEdit && order.status !== "received" && order.status !== "partial" && order.status !== "cancelled";
+
+  const canDelete = canEdit && order.status === "draft";
+
+  // Every outcome closes the dialog; a failure is shown under the header
+  // rather than swallowed, which is what this page used to do.
+  function run(
+    action: () => Promise<{ ok: boolean; errorKey?: string; detail?: string }>,
+    onOk: () => void,
+  ) {
+    setError(null);
+    startTransition(async () => {
+      const result = await action();
+      setReceiveOpen(false);
+      setCancelOpen(false);
+      setDeleteOpen(false);
+      if (result.ok) onOk();
+      else setError(t(result.errorKey as MessageKey) + (result.detail ? ` — ${result.detail}` : ""));
+    });
+  }
 
   const handleReceive = () => {
+    const quantities = Object.fromEntries(
+      order.lines.map((l) => [l.id, Number(arriving[l.id] ?? 0) || 0]),
+    );
+    setError(null);
     startTransition(async () => {
-      const result = await receiveOrder(order.id, receiveDate);
+      const result = await receiveOrder(order.id, receiveDate, quantities);
       if (result.ok) {
         setReceiveOpen(false);
+        toast(t(result.data === "received" ? "msg.received" : "msg.receivedPartial"));
+        router.refresh();
+      } else {
+        // Stay open: the quantities are still on screen to correct.
+        setError(t(result.errorKey as MessageKey) + (result.detail ? ` — ${result.detail}` : ""));
       }
     });
   };
-
-  const handleCancel = () => {
-    startTransition(async () => {
-      const result = await cancelOrder(order.id);
-      if (result.ok) {
-        setCancelOpen(false);
-      }
+  const handleCancel = () =>
+    run(() => cancelOrder(order.id), () => toast(t("msg.cancelled")));
+  const handleDelete = () =>
+    run(() => deleteOrder(order.id), () => {
+      toast(t("msg.deleted"));
+      router.push("/purchases");
     });
-  };
 
   const showBase = order.currency !== settings.baseCurrency;
+  const showReceived = order.status === "partial" || order.status === "received";
 
   return (
     <>
-      <div className="flex items-start justify-between gap-4 mb-5">
-        <div className="min-w-0">
-          <h1 className="text-lg font-semibold tracking-tight leading-tight">{order.number}</h1>
-          <div className="flex items-center gap-2 mt-0.5">
-            <Badge tone={PURCHASE_TONE[order.status]}>
-              {t(purchaseKey(order.status))}
-            </Badge>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0 no-print">
-          <LinkButton href="/purchases">{t("action.back")}</LinkButton>
-          <DownloadPdfButton kind="purchases" id={order.id} />
-          {canReceive && (
-            <Button
-              variant="primary"
-              onClick={() => setReceiveOpen(true)}
-              disabled={pending}
-            >
-              {t("action.receive")}
-            </Button>
-          )}
-          {canCancel && (
-            <Button
-              variant="danger"
-              onClick={() => setCancelOpen(true)}
-              disabled={pending}
-            >
-              {t("status.cancelled")}
-            </Button>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title={order.number}
+        subtitle={`${supplier.name} · ${formatDate(order.date, locale)}`}
+        actions={
+          <>
+            <Badge tone={PURCHASE_TONE[order.status]}>{t(purchaseKey(order.status))}</Badge>
+            <LinkButton href="/purchases">{t("action.back")}</LinkButton>
+            <DownloadPdfButton kind="purchases" id={order.id} />
+            {canDelete && (
+              <Button variant="danger" onClick={() => setDeleteOpen(true)} disabled={pending}>
+                {t("action.delete")}
+              </Button>
+            )}
+            {canCancel && !canDelete && (
+              <Button variant="danger" onClick={() => setCancelOpen(true)} disabled={pending}>
+                {t("action.cancelOrder")}
+              </Button>
+            )}
+            {canReceive && (
+              <Button variant="primary" onClick={openReceive} disabled={pending}>
+                {t("action.receive")}
+              </Button>
+            )}
+          </>
+        }
+      />
+
+      {error && (
+        <p className="text-2xs text-danger border border-danger-soft bg-danger-soft rounded-sm p-2 mb-4 no-print">
+          {error}
+        </p>
+      )}
 
       <Card className="mb-4">
-        <CardHeader title={t("label.company")} />
+        <CardHeader title={t("label.details")} />
         <div className="px-3 py-1 divide-y divide-line">
           <DetailRow label={t("label.supplier")}>
             {supplier.name}
@@ -146,7 +196,7 @@ export function PurchaseDetailClient({
       </Card>
 
       <Card className="mb-4">
-        <CardHeader title={t("label.quantity")} />
+        <CardHeader title={t("label.lines")} />
         {order.lines.length === 0 ? (
           <EmptyState compact title={t("empty.lines")} />
         ) : (
@@ -157,6 +207,9 @@ export function PurchaseDetailClient({
                   <th className="h-10 px-3 text-start font-medium">{t("label.name")}</th>
                   <th className="h-10 px-3 text-start font-medium">{t("label.description")}</th>
                   <th className="h-10 px-3 text-end font-medium">{t("label.qty")}</th>
+                  {showReceived && (
+                    <th className="h-10 px-3 text-end font-medium">{t("purchase.receivedSoFar")}</th>
+                  )}
                   <th className="h-10 px-3 text-end font-medium">{t("label.unitPrice")}</th>
                   <th className="h-10 px-3 text-end font-medium">{t("label.discount")}</th>
                   <th className="h-10 px-3 text-end font-medium">{t("label.total")}</th>
@@ -171,13 +224,18 @@ export function PurchaseDetailClient({
                       <td className="h-11 px-3">
                         <span>
                           {item ? localName(item, locale) : "—"}
-                          {item && <Num className="text-2xs text-faint ms-2">{item.sku}</Num>}
+                          {item && <span className="ms-2"><Num className="text-2xs text-faint">{item.sku}</Num></span>}
                         </span>
                       </td>
                       <td className="h-11 px-3 text-muted text-2xs">{line.description || "—"}</td>
                       <td className="h-11 px-3 text-end">
                         <Num>{line.qty}</Num>
                       </td>
+                      {showReceived && (
+                        <td className="h-11 px-3 text-end">
+                          <Num>{line.receivedQty ?? 0}</Num>
+                        </td>
+                      )}
                       <td className="h-11 px-3 text-end">
                         <Num>{money(line.unitPrice)}</Num>
                       </td>
@@ -272,21 +330,98 @@ export function PurchaseDetailClient({
         )}
       </Card>
 
-      <Confirm
+      {receipts.length > 0 && (
+        <Card className="mb-4">
+          <CardHeader title={t("purchase.receipts")} />
+          <div className="px-3 py-1 divide-y divide-line">
+            {receipts.map((r) => (
+              <DetailRow key={r.date} label={formatDate(r.date, locale)}>
+                <Num>{r.qty}</Num>
+              </DetailRow>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <RecordHistory collection="purchaseOrders" id={order.id} area="purchasing" />
+
+      <Modal
         open={receiveOpen}
         onClose={() => setReceiveOpen(false)}
-        onConfirm={handleReceive}
-        title={t("action.receive")}
-        message={t("msg.confirmReceive")}
-        pending={pending}
-      />
+        title={t("purchase.receiveTitle")}
+        description={t("purchase.receiveHint")}
+        width="lg"
+        footer={
+          <>
+            <Button onClick={() => setReceiveOpen(false)} disabled={pending}>
+              {t("action.cancel")}
+            </Button>
+            <Button variant="primary" onClick={handleReceive} disabled={pending}>
+              {t("action.receive")}
+            </Button>
+          </>
+        }
+      >
+        {error && (
+          <p className="text-2xs text-danger border border-danger-soft bg-danger-soft rounded-sm p-2 mb-3">
+            {error}
+          </p>
+        )}
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="hairline-b text-2xs text-muted">
+                <th className="h-9 px-2 text-start font-medium">{t("label.name")}</th>
+                <th className="h-9 px-2 text-end font-medium">{t("purchase.ordered")}</th>
+                <th className="h-9 px-2 text-end font-medium">{t("purchase.remaining")}</th>
+                <th className="h-9 px-2 text-end font-medium w-28">{t("purchase.receiveNow")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {order.lines.map((line) => {
+                const item = line.itemId ? itemById.get(line.itemId) : null;
+                const remaining = remainingOf(line);
+                return (
+                  <tr key={line.id} className="hairline-b last:border-b-0">
+                    <td className="h-11 px-2">{item ? localName(item, locale) : line.description || "—"}</td>
+                    <td className="h-11 px-2 text-end"><Num>{line.qty}</Num></td>
+                    <td className="h-11 px-2 text-end"><Num>{remaining}</Num></td>
+                    <td className="h-11 px-2">
+                      <NumberInput
+                        min={0}
+                        max={remaining}
+                        step="any"
+                        disabled={remaining === 0}
+                        value={arriving[line.id] ?? ""}
+                        onChange={(e) => setArriving({ ...arriving, [line.id]: e.target.value })}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Modal>
 
       <Confirm
         open={cancelOpen}
         onClose={() => setCancelOpen(false)}
         onConfirm={handleCancel}
-        title={t("status.cancelled")}
-        message={t("msg.error")}
+        title={t("action.cancelOrder")}
+        message={t("msg.confirmCancelOrder")}
+        confirmLabel={t("action.cancelOrder")}
+        tone="danger"
+        pending={pending}
+      />
+
+      <Confirm
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={handleDelete}
+        title={t("action.delete")}
+        message={t("msg.confirmDeleteHint")}
+        confirmLabel={t("action.delete")}
         tone="danger"
         pending={pending}
       />

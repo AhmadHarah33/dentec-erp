@@ -13,6 +13,7 @@ import { Modal, Confirm } from "@/components/ui/modal";
 import { PageTabs } from "@/components/ui/tabs";
 import { SETTINGS_TABS } from "@/lib/tabs";
 import { IconEdit, IconPlus, IconTrash } from "@/components/ui/icons";
+import { useToast } from "@/components/ui/toast";
 
 export interface WarehouseRow {
   warehouse: Warehouse;
@@ -39,6 +40,7 @@ export function WarehousesClient({
   locale: string;
 }) {
   const t = useT();
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Warehouse | null>(null);
@@ -70,7 +72,10 @@ export function WarehousesClient({
     setError(null);
     startTransition(async () => {
       const result = await saveWarehouse(editing?.id ?? null, form);
-      if (result.ok) setOpen(false);
+      if (result.ok) {
+        setOpen(false);
+        toast(t("msg.saved"));
+      }
       else setError(t(result.errorKey as MessageKey));
     });
   }
@@ -79,7 +84,10 @@ export function WarehousesClient({
     if (!confirming) return;
     startTransition(async () => {
       const result = await deleteWarehouse(confirming.id);
-      if (result.ok) setConfirming(null);
+      if (result.ok) {
+        setConfirming(null);
+        toast(t("msg.deleted"));
+      }
       else setError(t(result.errorKey as MessageKey) + " — " + (result.detail ?? ""));
     });
   }
@@ -111,7 +119,7 @@ export function WarehousesClient({
           />
         </Card>
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {rows.map(({ warehouse, lines, units, value }) => (
             <Card key={warehouse.id} className="p-3 group">
               <div className="flex items-start justify-between gap-2 mb-3">
@@ -193,7 +201,7 @@ export function WarehousesClient({
           </>
         }
       >
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label={t("label.nameAr")} required>
             <Input
               value={form.nameAr}
@@ -206,7 +214,6 @@ export function WarehousesClient({
               value={form.nameTr}
               onChange={(e) => setForm({ ...form, nameTr: e.target.value })}
               dir="ltr"
-              className="text-start"
             />
           </Field>
           <Field label={t("label.location")} className="sm:col-span-2">

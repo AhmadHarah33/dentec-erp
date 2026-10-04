@@ -150,12 +150,13 @@ export function DocumentSheet(props: SheetProps) {
     <article className="print-doc mx-auto w-full max-w-[210mm] bg-white text-ink p-8 text-xs">
       {/* ---- Header ------------------------------------------------ */}
       <header className="flex items-start justify-between gap-6 pb-4 border-b border-line">
-        <div className="flex items-start gap-3">
-          {/* Logo placeholder — swapped for the real mark by dropping a file
-              at /public/logo.svg and pointing this at it. */}
-          <div className="size-14 shrink-0 rounded-md border border-line grid place-items-center text-brand font-bold text-base">
-            {t("app.name")}
-          </div>
+        <div className="flex flex-col items-start gap-3">
+          {/* The wordmark is wide (about 3:1), so it heads the letterhead
+              rather than squeezing into a square beside the address. The
+              PDF renderer loads this page from the same origin, so a
+              root-relative path resolves there too. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.svg" alt={t("app.name")} className="h-8 w-auto" />
           <div className="leading-snug">
             <h1 className="text-sm font-bold text-brand">{companyName}</h1>
             <p className="text-2xs text-muted max-w-[60mm]">{settings.address}</p>

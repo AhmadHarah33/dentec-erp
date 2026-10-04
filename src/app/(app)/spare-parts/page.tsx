@@ -2,8 +2,11 @@ import { snapshot } from "@/lib/data/repository";
 import { getI18n } from "@/lib/i18n/server";
 import { buildStockIndex, onHand } from "@/lib/stock";
 import { ItemsClient } from "@/components/app/items-client";
+import { requireAccess } from "@/lib/auth/server";
+import { seesCost, withoutCost } from "@/lib/permissions";
 
 export default async function SparePartsPage() {
+  const member = await requireAccess("catalog", "view");
   const { locale, t } = await getI18n();
   const db = await snapshot();
   const index = buildStockIndex(db.stockMoves);
@@ -18,9 +21,10 @@ export default async function SparePartsPage() {
       title={t("page.spareParts.title")}
       subtitle={t("page.spareParts.subtitle")}
       newLabel={t("page.spareParts.new")}
-      items={items}
+      items={withoutCost(items, member.role)}
+      showCost={seesCost(member.role)}
       categories={db.categories}
-      machines={db.items.filter((i) => i.itemType === "product" && i.active)}
+      machines={withoutCost(db.items.filter((i) => i.itemType === "product" && i.active), member.role)}
       onHand={stock}
       currency={db.settings.baseCurrency}
       defaultTaxRate={db.settings.defaultTaxRate}

@@ -1,111 +1,24 @@
-import type { ComponentType, ReactNode, SVGProps } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import type { CurrencyCode } from "@/lib/data/types";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/cn";
-import { Badge, Dot, Num, TONE_TINT, type Tone } from "./primitives";
-import { EmptyState } from "./page";
+import { Dot, Num, type Tone } from "./primitives";
+import { ListCard, StatTile } from "./page";
 
 /**
- * Dashboard-only surface. Cards elsewhere in the app separate with a 1px
- * hairline; the dashboard's headline cards trade that for a "shadow as
- * border" — a crisp ring plus a soft fall (`shadow-ring`, globals.css) — so
- * the edge stays sharp at any zoom without adding a third elevation step.
- * Kept out of the shared `Card` so the rest of the app is untouched.
- */
-function dashSurface(className?: string) {
-  return cn("border border-transparent bg-surface rounded-lg shadow-ring", className);
-}
-
-/**
- * A KPI tile in the dashboard's own voice: an uppercase micro-label, a big
- * tabular value, and the verdict as a filled pill — never plain coloured
- * text, per the app's "a status never picks its own colour" rule.
+ * Dashboard building blocks.
  *
- * Same prop shape as `StatTile` on purpose, so the dashboard could always
- * fall back to the shared tile with a one-line swap.
+ * These used to be a second visual system — ring shadows, tinted head bands,
+ * uppercase micro-labels — that made the landing page look unlike every page
+ * behind it. They are now thin names over the shared kit, so the dashboard
+ * and the pages it links to read as one product.
  */
-export function KpiTile({
-  label,
-  value,
-  meta,
-  delta,
-  tone = "neutral",
-  icon: TileIcon,
-  chip,
-  href,
-}: {
-  label: string;
-  value: string;
-  meta?: string;
-  delta?: number;
-  tone?: Tone;
-  icon?: ComponentType<SVGProps<SVGSVGElement> & { size?: number }>;
-  chip?: string;
-  href?: string;
-}) {
-  const pillTone: Tone | undefined =
-    typeof delta === "number" && Number.isFinite(delta)
-      ? delta > 0
-        ? "success"
-        : delta < 0
-          ? "danger"
-          : "muted"
-      : chip
-        ? tone === "neutral"
-          ? "muted"
-          : tone
-        : undefined;
 
-  const pillLabel =
-    typeof delta === "number" && Number.isFinite(delta)
-      ? `${delta > 0 ? "+" : ""}${delta.toFixed(1)}%`
-      : chip;
+/** The dashboard's KPI tile is the app's KPI tile. */
+export const KpiTile = StatTile;
 
-  const body = (
-    <>
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0">
-          {TileIcon && (
-            <span className={cn("grid place-items-center size-8 rounded-sm shrink-0", TONE_TINT[tone])}>
-              <TileIcon size={16} />
-            </span>
-          )}
-          <span className="text-2xs font-semibold tracking-wide uppercase text-faint truncate">
-            {label}
-          </span>
-        </div>
-        {pillLabel && (
-          <Badge tone={pillTone} className="shrink-0">
-            <Num>{pillLabel}</Num>
-          </Badge>
-        )}
-      </div>
-
-      <span className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight leading-none text-ink">
-        <Num>{value}</Num>
-      </span>
-
-      {meta && <span className="text-2xs text-faint truncate">{meta}</span>}
-    </>
-  );
-
-  const shell = cn(
-    dashSurface("p-4 flex flex-col gap-3"),
-    "transition-transform duration-[var(--dur-swift)]",
-    href && "hover:shadow-pop active:scale-[0.99]",
-  );
-
-  return href ? (
-    <Link href={href} className={shell}>
-      {body}
-    </Link>
-  ) : (
-    <div className={shell}>{body}</div>
-  );
-}
-
-/** Section chrome for the dashboard's chart/ranking cards — shadow-ring, no hairline header. */
+/** A titled card for the dashboard's chart and ranking panels. */
 export function DashCard({
   title,
   meta,
@@ -120,16 +33,21 @@ export function DashCard({
   className?: string;
 }) {
   return (
-    <div className={dashSurface(cn("flex flex-col min-w-0", className))}>
-      <div className="flex items-center justify-between gap-3 px-5 pt-5">
+    <section
+      className={cn(
+        "border border-line bg-surface rounded-lg shadow-card flex flex-col min-w-0",
+        className,
+      )}
+    >
+      <div className="flex items-center justify-between gap-3 px-4 sm:px-5 min-h-12 py-2 hairline-b">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold truncate">{title}</h2>
-          {meta && <p className="text-2xs text-faint mt-0.5 truncate">{meta}</p>}
+          {meta && <p className="text-2xs text-faint truncate">{meta}</p>}
         </div>
         {action}
       </div>
-      <div className="p-5">{children}</div>
-    </div>
+      <div className="p-4 sm:p-5 flex-1">{children}</div>
+    </section>
   );
 }
 
@@ -154,7 +72,7 @@ export function PeriodToggle<T extends string>({
     <div
       role="tablist"
       aria-label={ariaLabel}
-      className="inline-flex items-center gap-0.5 p-0.5 rounded-full border border-line bg-sunken no-print"
+      className="inline-flex items-center gap-0.5 p-0.5 rounded-sm border border-line bg-sunken no-print"
     >
       {options.map((o) => {
         const active = o.value === value;
@@ -166,7 +84,7 @@ export function PeriodToggle<T extends string>({
             aria-selected={active}
             scroll={false}
             className={cn(
-              "h-8 px-3.5 grid place-items-center rounded-full text-2xs font-medium transition-colors duration-[var(--dur-swift)]",
+              "h-8 px-3 grid place-items-center rounded-xs text-2xs font-medium transition-colors duration-[var(--dur-swift)]",
               active ? "bg-surface text-ink shadow-card font-semibold" : "text-muted hover:text-ink",
             )}
           >
@@ -178,72 +96,46 @@ export function PeriodToggle<T extends string>({
   );
 }
 
-/**
- * A queue card for the dashboard's "needs attention" band — one line per
- * item, one number or status per line. The old attention cards (icon square,
- * a tone-coloured count chip, a subtitle under every title) read as busy at
- * four rows; this keeps only what decides whether to click through.
- */
+/** A queue card for the dashboard's "needs attention" band. */
 export function AttentionCard({
   title,
   count,
+  tone = "neutral",
   href,
   viewAllLabel,
   emptyTitle,
   children,
 }: {
   title: string;
-  /** Shown as a quiet number beside the title, not a coloured chip. */
   count?: number;
+  tone?: Tone;
   href?: string;
   viewAllLabel?: string;
   emptyTitle?: string;
   children?: ReactNode;
 }) {
-  const isEmpty = !children || (Array.isArray(children) && children.length === 0);
-
   return (
-    <div className={dashSurface("flex flex-col overflow-hidden")}>
-      {/* A tinted head band, so the card's name reads as a label on the card
-          rather than the first line inside it. */}
-      <div className="flex items-center justify-between gap-3 px-5 h-12 bg-accent-soft border-b border-accent-line shrink-0">
-        <h2 className="text-xs font-semibold text-accent-strong truncate">{title}</h2>
-        {typeof count === "number" && count > 0 && (
-          <span className="text-2xs font-semibold text-accent shrink-0">
-            <Num>{count}</Num>
-          </span>
-        )}
-      </div>
-
-      <div className="flex-1 px-5 pt-3">
-        {isEmpty ? (
-          <EmptyState compact title={emptyTitle ?? ""} />
-        ) : (
-          <ul className="divide-y divide-line/70">{children}</ul>
-        )}
-      </div>
-
-      {href && !isEmpty && (
-        <Link
-          href={href}
-          className="mx-5 mt-1 mb-4 pt-3 text-2xs font-medium text-accent hover:text-accent-strong transition-colors duration-[var(--dur-swift)]"
-        >
-          {viewAllLabel}
-        </Link>
-      )}
-    </div>
+    <ListCard
+      title={title}
+      count={count}
+      tone={tone}
+      href={href}
+      viewAllLabel={viewAllLabel}
+      emptyTitle={emptyTitle}
+    >
+      {children}
+    </ListCard>
   );
 }
 
 /**
  * One row inside an `AttentionCard`: the thing, and the single fact that
- * decides whether it needs you now — an amount, or a status dot. Never both,
- * and never a second, quieter line under the title — that pairing is exactly
- * what made the old cards feel dense.
+ * decides whether it needs you now — an amount, or a status dot.
  */
 export function AttentionRow({
   href,
   title,
+  subtitle,
   value,
   valueTone = "neutral",
   status,
@@ -251,6 +143,7 @@ export function AttentionRow({
 }: {
   href: string;
   title: string;
+  subtitle?: string;
   value?: string;
   valueTone?: "neutral" | "danger" | "warn" | "success";
   status?: string;
@@ -263,15 +156,20 @@ export function AttentionRow({
         ? "text-warn"
         : valueTone === "success"
           ? "text-success"
-          : "text-muted";
+          : "text-ink";
 
   return (
     <li>
       <Link
         href={href}
-        className="flex items-center gap-3 py-3 hover:opacity-70 active:opacity-60 transition-opacity duration-[var(--dur-swift)]"
+        className="flex items-center gap-3 px-4 sm:px-5 min-h-12 py-2 hover:bg-sunken active:bg-sunken transition-colors duration-[var(--dur-swift)]"
       >
-        <span className="min-w-0 flex-1 text-xs font-medium truncate">{title}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-xs font-medium truncate">
+            <span className="[unicode-bidi:plaintext]">{title}</span>
+          </span>
+          {subtitle && <span className="block text-2xs text-faint truncate">{subtitle}</span>}
+        </span>
         {status && (
           <span className="text-2xs text-muted shrink-0">
             <Dot tone={statusTone}>{status}</Dot>
@@ -285,12 +183,7 @@ export function AttentionRow({
   );
 }
 
-/**
- * A ranked list in the "Traffic Sources" idiom: uppercase tracked label and
- * value on one line, a thin ink-coloured track beneath. Kept apart from the
- * shared `BarList` (accent-blue track, used on Reports too) so this look
- * stays scoped to the dashboard.
- */
+/** A ranked list: label and exact value on one line, a thin accent track beneath. */
 export function RankedList({
   points,
   currency,
@@ -304,23 +197,24 @@ export function RankedList({
   const max = Math.max(...points.map((p) => p.value), 1);
 
   return (
-    <ul className="flex flex-col">
+    <ol className="flex flex-col gap-4">
       {points.map((p, i) => (
-        <li key={p.label + i} className="py-2.5 first:pt-0 last:pb-0">
+        <li key={p.label + i}>
           <div className="flex items-baseline justify-between gap-3 mb-1.5">
-            <span className="text-2xs font-semibold tracking-wide uppercase text-muted truncate min-w-0">
+            <span className="text-xs text-ink truncate min-w-0">
+              <span className="me-2"><Num className="text-faint">{i + 1}</Num></span>
               {p.label}
             </span>
             <Num className="text-xs font-semibold text-ink shrink-0">{format(p.value)}</Num>
           </div>
-          <div className="h-1.5 bg-sunken rounded-full overflow-hidden">
+          <div className="h-1 bg-sunken rounded-full overflow-hidden">
             <div
-              className="h-full bg-ink rounded-full"
+              className="h-full bg-accent rounded-full"
               style={{ width: `${Math.max((p.value / max) * 100, 1.5)}%` }}
             />
           </div>
         </li>
       ))}
-    </ul>
+    </ol>
   );
 }

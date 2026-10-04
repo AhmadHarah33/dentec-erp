@@ -2,8 +2,10 @@ import { snapshot } from "@/lib/data/repository";
 import { getI18n } from "@/lib/i18n/server";
 import { invoiceOutstanding, invoiceTotalBase } from "@/lib/queries";
 import { InvoicesClient, type InvoiceRow } from "./invoices-client";
+import { requireAccess } from "@/lib/auth/server";
 
 export default async function InvoicesPage() {
+  await requireAccess("invoices", "view");
   const { locale } = await getI18n();
   const db = await snapshot();
 

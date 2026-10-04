@@ -1,6 +1,6 @@
 # Project state
 
-Last updated: 2026-09-08
+Last updated: 2026-10-03
 
 ## What this is
 
@@ -13,7 +13,7 @@ exposed through a tunnel. Arabic now, Turkish later.
 | Area | Decision |
 |---|---|
 | Hosting | Self-hosted, tunnel in front |
-| Database | None yet — JSON file behind a repository interface; Supabase (self-hosted, via CLI) later |
+| Database | Postgres on the self-hosted Supabase, private `erp` schema (release Phase 2) |
 | Accounting | Invoices, payments, balances. No double-entry |
 | Auth | **None in v1.** Users and roles exist as data only |
 | Invoicing | Per-line VAT, discounts, printable A4, multi-currency |
@@ -124,6 +124,38 @@ optional, so existing rows stay valid.
 Testing those flows left three records in the demo data: INV-2026-0080,
 PO-2026-0017, and an extra part on SRV-2026-0017. Settings → reset demo data
 clears them.
+
+## Design pass 4 — 2026-10-03 (release Phase 1)
+
+A polish pass inside the existing identity, against a screenshot audit of all
+24 routes at 390px and 1366px. See `RELEASE-PLAN.md` for the wider release.
+
+- **One visual system.** The dashboard's private style (ring shadows, tinted
+  head bands, uppercase micro-labels) is gone; `KpiTile`/`AttentionCard`/
+  `DashCard` are now names over `StatTile`/`ListCard`/`Card`. Tiles read
+  label → ink figure → status dot; no tinted icon squares or coloured figures.
+- **Money symbols are the app's own** (`$ € ₺ ر.س د.إ ل.س`): Intl printed
+  "US$" in Arabic and a bare "£" for SYP. `.num` became `unicode-bidi:
+  plaintext`, so a compact Arabic figure reads "34.5 ألف $" instead of
+  "ألف 34.5 US$".
+- **`DateInput`** replaced all 20 native date fields (English `mm/dd/yyyy` on
+  English Windows). Filters got from/to labels; the "to" field had been
+  announced as "due date".
+- **The sidebar shows all thirteen destinations**; collapsing groups cost a
+  click per visit.
+- **Dashboard:** title and long date instead of "أهلاً بك 👋"; month-to-date
+  sales compared with the same days of last month (it showed −100% every
+  morning of a new month); a receivables tile that claimed a comparison it
+  never made now just shows receivables; queue rows carry invoice number and
+  days late, or SKU.
+- **Bugs:** `ms-2` on `<Num>` resolved to the wrong side (SKU glued to names);
+  `grid lg:grid-cols-3` without a base column let the service job page overflow
+  a phone; settings labelled all three prefixes "الرقم"; phone numbers reversed
+  in RTL inputs; SKUs wrapped at hyphens in reports; Turkish "0 fatura
+  faturadan"; Arabic-Indic digits in 19 strings.
+- **New states:** loading skeleton, error page with retry, Arabic 404s, and a
+  shared toast after saves and deletes (only settings had feedback before).
+- Printed documents carry the real logo instead of a text placeholder.
 
 ## Dual-region billing and PDF — 2026-09-08
 

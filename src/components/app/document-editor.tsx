@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type {
@@ -30,6 +31,8 @@ import {
   Textarea,
 } from "@/components/ui/primitives";
 import { IconClose, IconPlus } from "@/components/ui/icons";
+import { DateInput } from "@/components/ui/date-input";
+import { useToast } from "@/components/ui/toast";
 
 interface Props {
   kind: "sales" | "purchase";
@@ -60,6 +63,7 @@ export function DocumentEditor({
   locale,
 }: Props) {
   const t = useT();
+  const toast = useToast();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [doc, setDoc] = useState<EditorDoc>(initial);
@@ -174,6 +178,7 @@ export function DocumentEditor({
           });
 
       if (result.ok) {
+        toast(t("msg.saved"));
         router.push(isSales ? `/invoices/${result.data}` : `/purchases/${result.data}`);
       } else {
         setError(
@@ -204,22 +209,35 @@ export function DocumentEditor({
         }
       />
 
-      <div className="grid lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-3">
-          <CardHeader title={t("label.description")} />
-          <div className="p-3 grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <CardHeader title={t("label.details")} />
+          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <Field label={partyLabel} required>
               <Select
                 value={doc.partyId}
                 onChange={(e) => patch({ partyId: e.target.value })}
               >
-                <option value="">—</option>
+                <option value="" disabled>
+                  {t("label.choose")}
+                </option>
                 {parties.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
                   </option>
                 ))}
               </Select>
+              {parties.length === 0 && (
+                <p className="text-2xs text-warn leading-snug">
+                  {t(isSales ? "setup.noCustomers" : "setup.noSuppliers")}{" "}
+                  <Link
+                    href={isSales ? "/customers" : "/suppliers"}
+                    className="font-semibold text-accent underline underline-offset-2"
+                  >
+                    {t("setup.addOne")}
+                  </Link>
+                </p>
+              )}
             </Field>
             <Field label={t("label.warehouse")}>
               <Select
@@ -234,19 +252,15 @@ export function DocumentEditor({
               </Select>
             </Field>
             <Field label={t("label.date")}>
-              <Input
-                type="date"
-                dir="ltr"
+              <DateInput
                 value={doc.date}
-                onChange={(e) => patch({ date: e.target.value })}
+                onChange={(v) => patch({ date: v })}
               />
             </Field>
             <Field label={secondDateLabel}>
-              <Input
-                type="date"
-                dir="ltr"
+              <DateInput
                 value={doc.secondDate}
-                onChange={(e) => patch({ secondDate: e.target.value })}
+                onChange={(v) => patch({ secondDate: v })}
               />
             </Field>
             <Field label={t("label.currency")}>
@@ -282,7 +296,7 @@ export function DocumentEditor({
 
         <Card className="lg:col-span-2">
           <CardHeader
-            title={t("label.description")}
+            title={t("label.lines")}
             meta={t("msg.rowsCount", { n: doc.lines.length })}
             action={
               <Button size="sm" onClick={addLine}>

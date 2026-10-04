@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import type { Customer, Item, ServiceJob, User } from "@/lib/data/types";
+import type { Customer, Item, MachineUnit, ServiceJob, User } from "@/lib/data/types";
+import { warrantyState } from "@/lib/warranty";
 import { useT } from "@/lib/i18n/context";
 import type { MessageKey } from "@/lib/i18n";
 import { localName } from "@/lib/labels";
@@ -20,6 +21,9 @@ import {
 } from "@/components/ui/primitives";
 import { Modal } from "@/components/ui/modal";
 import { ServiceBoard } from "@/components/app/service-board";
+import { DateInput } from "@/components/ui/date-input";
+import { useToast } from "@/components/ui/toast";
+import { useCan } from "@/components/app/member-context";
 
 /**
  * The workshop, shaped like the workshop.
@@ -34,6 +38,7 @@ export function ServiceClient({
   customers,
   items,
   users,
+  units,
   shortages,
   locale,
 }: {
@@ -41,11 +46,15 @@ export function ServiceClient({
   customers: Customer[];
   items: Item[];
   users: User[];
+  /** Machines sold through the ERP, so a job can point at the exact one. */
+  units: MachineUnit[];
   /** Job id → how many distinct parts it is short. Computed on the server. */
   shortages: Record<string, number>;
   locale: string;
 }) {
   const t = useT();
+  const canEdit = useCan("service", "edit");
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [query, setQuery] = useState("");
   const [technicianFilter, setTechnicianFilter] = useState("");
@@ -58,12 +67,36 @@ export function ServiceClient({
     machineItemId: "",
     machineLabel: "",
     serialNo: "",
+    unitId: "",
     reportedFault: "",
     technicianId: "",
     date: today(),
     laborCharge: 0,
     underWarranty: false,
   });
+
+  // The chosen customer's registered machines.
+  const customerUnits = useMemo(
+    () => units.filter((u) => newJobForm.customerId && u.customerId === newJobForm.customerId),
+    [units, newJobForm.customerId],
+  );
+  function pickUnit(unitId: string) {
+    const unit = units.find((u) => u.id === unitId);
+    if (!unit) {
+      setNewJobForm({ ...newJobForm, unitId: "" });
+      return;
+    }
+    const item = items.find((i) => i.id === unit.itemId);
+    setNewJobForm({
+      ...newJobForm,
+      unitId,
+      machineItemId: unit.itemId,
+      machineLabel: item ? localName(item, locale) : newJobForm.machineLabel,
+      serialNo: unit.serialNo,
+      // Suggested from the warranty end; the person can still untick it.
+      underWarranty: warrantyState(unit, newJobForm.date) === "active",
+    });
+  }
 
   const stats = useMemo(() => {
     const open = jobs.filter((j) => j.status !== "delivered");
@@ -100,6 +133,7 @@ export function ServiceClient({
         machineItemId: newJobForm.machineItemId || null,
         machineLabel: newJobForm.machineLabel,
         serialNo: newJobForm.serialNo,
+        unitId: newJobForm.unitId || null,
         reportedFault: newJobForm.reportedFault,
         diagnosis: "",
         status: "received",
@@ -112,12 +146,14 @@ export function ServiceClient({
       });
 
       if (result.ok) {
+        toast(t("msg.saved"));
         setNewJobOpen(false);
         setNewJobForm({
           customerId: "",
           machineItemId: "",
           machineLabel: "",
           serialNo: "",
+          unitId: "",
           reportedFault: "",
           technicianId: "",
           date: today(),
@@ -139,7 +175,8 @@ export function ServiceClient({
         title={t("page.service.title")}
         subtitle={t("service.dragHint")}
         actions={
-          <Button
+          canEdit && (
+<Button
             variant="primary"
             onClick={() => {
               setError(null);
@@ -149,6 +186,7 @@ export function ServiceClient({
             <IconPlus />
             {t("page.service.new")}
           </Button>
+)
         }
       />
 
@@ -230,6 +268,7 @@ export function ServiceClient({
         users={users}
         shortages={shortages}
         showDelivered={showDelivered}
+        readOnly={!canEdit}
       />
 
       {/* New Job Modal -------------------------------------------- */}
@@ -248,11 +287,13 @@ export function ServiceClient({
           </>
         }
       >
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label={t("label.customer")} required className="sm:col-span-2">
             <Select
               value={newJobForm.customerId}
-              onChange={(e) => setNewJobForm({ ...newJobForm, customerId: e.target.value })}
+              onChange={(e) =>
+                setNewJobForm({ ...newJobForm, customerId: e.target.value, unitId: "" })
+              }
             >
               <option value="">—</option>
               {customers.map((c) => (
@@ -262,6 +303,22 @@ export function ServiceClient({
               ))}
             </Select>
           </Field>
+
+          {customerUnits.length > 0 && (
+            <Field label={t("serial.unit")} className="sm:col-span-2">
+              <Select value={newJobForm.unitId} onChange={(e) => pickUnit(e.target.value)}>
+                <option value="">{t("serial.unitNone")}</option>
+                {customerUnits.map((u) => {
+                  const item = items.find((i) => i.id === u.itemId);
+                  return (
+                    <option key={u.id} value={u.id}>
+                      {(item ? localName(item, locale) : "") + " · " + u.serialNo}
+                    </option>
+                  );
+                })}
+              </Select>
+            </Field>
+          )}
 
           <Field label={t("label.machine")} className="sm:col-span-2">
             <Select
@@ -287,17 +344,16 @@ export function ServiceClient({
 
           <Field label={t("label.serialNo")}>
             <Input
+              dir="ltr"
               value={newJobForm.serialNo}
               onChange={(e) => setNewJobForm({ ...newJobForm, serialNo: e.target.value })}
             />
           </Field>
 
           <Field label={t("label.date")}>
-            <Input
-              type="date"
+            <DateInput
               value={newJobForm.date}
-              onChange={(e) => setNewJobForm({ ...newJobForm, date: e.target.value })}
-              dir="ltr"
+              onChange={(v) => setNewJobForm({ ...newJobForm, date: v })}
             />
           </Field>
 

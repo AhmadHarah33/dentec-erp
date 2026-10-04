@@ -1,6 +1,7 @@
 import { snapshot } from "@/lib/data/repository";
 import { getI18n } from "@/lib/i18n/server";
-import { getViewRole } from "@/lib/roles.server";
+import { requireMember } from "@/lib/auth/server";
+import { can, dashboardFocus, seesCost, type Area, type Level } from "@/lib/permissions";
 import { buildStockIndex, lowStock, stockValue } from "@/lib/stock";
 import {
   invoiceOutstanding,
@@ -17,8 +18,9 @@ import {
 import { formatMoney, formatMoneyCompact, formatNumber } from "@/lib/money";
 import {
   daysOverdue,
-  formatDate,
+  formatDateLong,
   formatMonth,
+  formatMonthTick,
   isInMonth,
   lastMonths,
   today,
@@ -44,6 +46,7 @@ import {
   IconWrench,
 } from "@/components/ui/icons";
 import { SERVICE_TONE, serviceKey } from "@/lib/labels";
+import { SetupChecklist } from "@/components/app/setup-checklist";
 import { countedPhrase, type CountedNoun } from "@/lib/plural";
 
 /**
@@ -56,19 +59,22 @@ import { countedPhrase, type CountedNoun } from "@/lib/plural";
  *
  * The view role reorders this and nothing else. Accounting leads with money
  * and drops the workshop; service leads with the workshop and drops revenue
- * figures it has no use for. No page is hidden either way: the role is a
- * preference, not a permission.
+ * figures it has no use for. The focus follows the signed-in person's role
+ * (`dashboardFocus`); what each role may open is enforced by the pages and
+ * actions themselves, and the buttons here only offer what the role can do.
  */
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; denied?: string }>;
 }) {
   const { locale, t } = await getI18n();
-  const role = await getViewRole();
+  const member = await requireMember();
+  const role = dashboardFocus(member.role);
+  const allowed = (area: Area, level: Level) => can(member.role, area, level);
   const db = await snapshot();
   const { baseCurrency } = db.settings;
-  const { period } = await searchParams;
+  const { period, denied } = await searchParams;
   const trendMonths = period === "6" ? 6 : 12;
 
   const money = (n: number) => formatMoney(n, baseCurrency, locale);
@@ -106,8 +112,11 @@ export default async function DashboardPage({
   const live = db.salesInvoices.filter(isLive);
   const monthInvoices = live.filter((i) => isInMonth(i.date, thisMonth));
   const monthSales = monthInvoices.reduce((s, i) => s + invoiceTotalBase(i), 0);
+  // Month-to-date against the same days of last month. Comparing a month
+  // three days old against a whole one reads as a collapse every morning.
+  const dayOfMonth = Number(now.slice(8, 10));
   const prevSales = live
-    .filter((i) => isInMonth(i.date, prevMonth))
+    .filter((i) => isInMonth(i.date, prevMonth) && Number(i.date.slice(8, 10)) <= dayOfMonth)
     .reduce((s, i) => s + invoiceTotalBase(i), 0);
   const delta = prevSales > 0 ? ((monthSales - prevSales) / prevSales) * 100 : undefined;
 
@@ -133,7 +142,7 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
 
   /* ---- What this role leads with ---------------------------------- */
 
-  const showMoney = role !== "service";
+  const showMoney = role !== "service" && (allowed("finance", "view") || allowed("invoices", "view"));
 
   const overdueTile = (
     <KpiTile
@@ -263,6 +272,7 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
           key={inv.id}
           href={"/invoices/" + inv.id}
           title={customerName(inv.customerId)}
+          subtitle={inv.number + " · " + t("dash.daysLate", counted("day", daysOverdue(inv.dueDate)))}
           value={money(invoiceOutstanding(inv, db.payments))}
           valueTone="danger"
         />
@@ -284,6 +294,7 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
           key={row.item.id}
           href="/inventory"
           title={itemName(row.item)}
+          subtitle={row.item.sku}
           value={count(row.qty)}
           valueTone={row.health === "out" ? "danger" : "warn"}
         />
@@ -355,16 +366,17 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
   return (
     <>
       <PageHeader
-        size="hero"
-        title={t("dash.greeting")}
-        subtitle={formatDate(now, locale)}
+        title={t("dash.title")}
+        subtitle={formatDateLong(now, locale)}
         actions={
           <>
-            {role === "service" ? (
-              <LinkButton href="/service" variant="primary">
-                <IconPlus />
-                {t("dash.newJob")}
-              </LinkButton>
+            {role === "service" || !allowed("invoices", "limited") ? (
+              allowed("service", "edit") && (
+                <LinkButton href="/service" variant="primary">
+                  <IconPlus />
+                  {t("dash.newJob")}
+                </LinkButton>
+              )
             ) : (
               <LinkButton href="/invoices/new" variant="primary">
                 <IconPlus />
@@ -374,19 +386,29 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
             {/* cn() is a plain join, so a `hidden` utility on LinkButton would
                 lose to the `inline-flex` in its base class. Wrap instead. */}
             <span className="hidden sm:flex items-center gap-2">
-              {role === "accounting" && (
+              {role === "accounting" && allowed("finance", "edit") && (
                 <LinkButton href="/accounting">{t("page.accounting.newPayment")}</LinkButton>
               )}
-              {role !== "accounting" && (
+              {role !== "accounting" && allowed("purchasing", "edit") && (
                 <LinkButton href="/purchases/new">{t("dash.newPurchase")}</LinkButton>
               )}
-              {role === "owner" && <LinkButton href="/service">{t("dash.newJob")}</LinkButton>}
+              {role === "owner" && allowed("service", "edit") && (
+                <LinkButton href="/service">{t("dash.newJob")}</LinkButton>
+              )}
             </span>
           </>
         }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8 stagger">{tiles}</div>
+      {denied && (
+        <p role="status" className="text-xs text-warn bg-warn-soft border border-warn-line rounded-sm px-4 py-3 mb-6">
+          {t("auth.denied")}
+        </p>
+      )}
+
+      {member.role === "owner" && <SetupChecklist db={db} t={t} />}
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">{tiles}</div>
 
       <h2 className="text-sm font-semibold mb-4">{t("dash.needsAttention")}</h2>
 
@@ -395,33 +417,46 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
           <EmptyState title={t("dash.allClear")} hint={t("dash.allClearHint")} />
         </Card>
       ) : (
-        <div className={"grid gap-4 mb-8 stagger " + listCols}>{lists.map((l) => l.node)}</div>
+        <div className={"grid grid-cols-1 gap-4 mb-8 " + listCols}>{lists.map((l) => l.node)}</div>
       )}
 
       {showMoney ? (
         <>
           <h2 className="text-sm font-semibold mb-4">{t("dash.performance")}</h2>
 
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-4 stagger">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             <KpiTile
               label={t("dash.salesThisMonth")}
               value={compact(monthSales)}
-              delta={delta}
-              meta={t("dash.fromInvoices", counted("invoice", monthInvoices.length))}
+              delta={monthSales > 0 ? delta : undefined}
+              meta={
+                monthSales > 0 && delta !== undefined
+                  ? t("dash.vsSamePeriod")
+                  : t("dash.fromInvoices", counted("invoice", monthInvoices.length))
+              }
+              href="/invoices"
+            />
+            <KpiTile
+              label={t("dash.collectedThisMonth")}
+              value={compact(collected)}
+              href="/accounting"
             />
             <KpiTile
               label={t("dash.receivables")}
               value={compact(receivables)}
-              meta={t("dash.vsLastMonth")}
+              href="/accounting"
             />
-            <KpiTile
-              label={t("dash.stockValue")}
-              value={compact(stockTotal)}
-              meta={t("dash.atStandardCost")}
-            />
+            {seesCost(member.role) && (
+              <KpiTile
+                label={t("dash.stockValue")}
+                value={compact(stockTotal)}
+                meta={t("dash.atStandardCost")}
+                href="/inventory"
+              />
+            )}
           </div>
 
-          <div className="grid lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <DashCard
               className="lg:col-span-2"
               title={t("dash.salesTrend")}
@@ -447,6 +482,7 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
               <TrendBars
                 points={trend.map((p) => ({
                   label: formatMonth(p.month, locale),
+                  tick: formatMonthTick(p.month, locale),
                   value: p.sales,
                   meta: t("dash.fromInvoices", counted("invoice", p.count)),
                   highlight: p.month === thisMonth || (p.sales === peakSales && p.sales > 0),
@@ -476,12 +512,14 @@ const itemName = (item: { nameAr: string; nameTr: string }) =>
         /* Service gets the stock picture where the money picture would be. */
         <>
           <h2 className="text-sm font-semibold mb-4">{t("dash.performance")}</h2>
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 stagger">
-            <KpiTile
-              label={t("dash.stockValue")}
-              value={compact(stockTotal)}
-              meta={t("dash.atStandardCost")}
-            />
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+            {seesCost(member.role) && (
+              <KpiTile
+                label={t("dash.stockValue")}
+                value={compact(stockTotal)}
+                meta={t("dash.atStandardCost")}
+              />
+            )}
             <KpiTile label={t("dash.pendingPurchases")} value={count(pendingPOs.length)} />
             <KpiTile label={t("service.delivered")} value={count(deliveredThisMonth)} />
           </div>

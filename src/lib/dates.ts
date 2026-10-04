@@ -26,6 +26,16 @@ export function addDays(date: ISODate, days: number): ISODate {
   return d.toISOString().slice(0, 10);
 }
 
+/** Add whole calendar months, clamping to the last day (31 Jan + 1 month = 28/29 Feb). */
+export function addMonths(date: ISODate, months: number): ISODate {
+  const [y, m, d] = date.split("-").map(Number);
+  const total = m - 1 + months;
+  const year = y + Math.floor(total / 12);
+  const month = ((total % 12) + 12) % 12;
+  const last = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(Math.min(d, last)).padStart(2, "0")}`;
+}
+
 export function daysBetween(from: ISODate, to: ISODate): number {
   const a = Date.parse(from + "T00:00:00Z");
   const b = Date.parse(to + "T00:00:00Z");
@@ -72,12 +82,37 @@ export function formatDate(date: ISODate | null | undefined, locale = "ar"): str
   );
 }
 
+/** "السبت، 3 أكتوبر 2026" — for a page subtitle, never a table cell. */
+export function formatDateLong(date: ISODate, locale = "ar"): string {
+  return stripBidi(
+    new Intl.DateTimeFormat(`${locale}-u-ca-gregory-nu-latn`, {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }).format(new Date(date + "T00:00:00")),
+  );
+}
+
 export function formatMonth(date: ISODate, locale = "ar"): string {
   return stripBidi(
     new Intl.DateTimeFormat(`${locale}-u-ca-gregory-nu-latn`, {
       month: "short",
       year: "2-digit",
     }).format(new Date(date + "T00:00:00")),
+  );
+}
+
+/**
+ * A month name alone, for a chart axis where the year is already obvious
+ * from position. Arabic has no short month forms, so this is the full name;
+ * the axis thins its ticks to make room.
+ */
+export function formatMonthTick(date: ISODate, locale = "ar"): string {
+  return stripBidi(
+    new Intl.DateTimeFormat(`${locale}-u-ca-gregory-nu-latn`, { month: "short" }).format(
+      new Date(date + "T00:00:00"),
+    ),
   );
 }
 

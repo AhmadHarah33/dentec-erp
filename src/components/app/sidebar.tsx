@@ -7,50 +7,38 @@ import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
 import { NAV, isActive } from "@/lib/nav";
 import { useT } from "@/lib/i18n/context";
-import { IconChevronDown } from "@/components/ui/icons";
-import { RoleSwitcher } from "./role-switcher";
+import { UserMenu } from "./user-menu";
+import { useMember } from "./member-context";
+import { areaForPath, can } from "@/lib/permissions";
 import { LocaleToggle } from "./locale-toggle";
 
 /**
- * Sixteen destinations in six groups is too many to scan at once, so a group
- * opens only when you are inside it. Opening another does not close it — once
- * you have deliberately opened a group it stays open for the session, which
- * keeps the sidebar from fighting you while you move between two areas.
+ * Thirteen destinations in six groups, all visible at once. They fit a
+ * 768px-tall laptop screen, and a menu you have to open before you can read
+ * it costs a click on every visit to a group you are not already in. The
+ * group names are quiet labels, not controls.
  */
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
   const t = useT();
   const pathname = usePathname();
+  const { role } = useMember();
 
-  const currentGroup =
-    NAV.find((g) => g.items.some((i) => isActive(pathname, i.href)))?.titleKey ?? NAV[0].titleKey;
-
-  const [opened, setOpened] = useState<string[]>([]);
-
-  function toggle(key: string) {
-    setOpened((prev) =>
-      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
-    );
-  }
+  // A destination this role cannot open is not shown at all; a group left
+  // with nothing in it goes too.
+  const groups = NAV.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => {
+      const area = areaForPath(item.href);
+      return !area || can(role, area, "view");
+    }),
+  })).filter((group) => group.items.length > 0);
 
   return (
-    <nav className="flex flex-col py-2 divide-y divide-line/60">
-      {NAV.map((group) => {
-        const open = group.titleKey === currentGroup || opened.includes(group.titleKey);
-        return (
-        <div key={group.titleKey} className="py-2 first:pt-0 last:pb-0">
-          <button
-            type="button"
-            onClick={() => toggle(group.titleKey)}
-            aria-expanded={open}
-            className="w-full flex items-center gap-2 px-6 h-9 text-2xs font-semibold text-faint uppercase tracking-wider hover:text-muted transition-colors"
-          >
-            <span className="flex-1 text-start">{t(group.titleKey)}</span>
-            <IconChevronDown
-              size={12}
-              className={cn("transition-transform shrink-0", !open && "-rotate-90 rtl:rotate-90")}
-            />
-          </button>
-          <ul className={cn("px-3 space-y-0.5 pb-1", !open && "hidden")}>
+    <nav className="flex flex-col gap-4 px-3 py-4">
+      {groups.map((group) => (
+        <div key={group.titleKey}>
+          <h3 className="px-3 mb-1 text-2xs font-semibold text-faint">{t(group.titleKey)}</h3>
+          <ul className="space-y-px">
             {group.items.map((item) => {
               const active = isActive(pathname, item.href);
               return (
@@ -60,12 +48,18 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
                     onClick={onNavigate}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "flex items-center gap-3 h-10 px-3 rounded-sm text-xs transition-colors",
+                      "relative flex items-center gap-3 h-10 lg:h-9 px-3 rounded-sm text-xs transition-colors duration-[var(--dur-swift)]",
                       active
                         ? "bg-accent-soft text-accent font-semibold"
                         : "text-muted hover:text-ink hover:bg-sunken",
                     )}
                   >
+                    {active && (
+                      <span
+                        aria-hidden="true"
+                        className="absolute inset-y-2 -start-3 w-[3px] rounded-e-full bg-accent"
+                      />
+                    )}
                     <item.icon size={17} className="shrink-0" />
                     <span className="truncate">{t(item.labelKey)}</span>
                   </Link>
@@ -74,8 +68,7 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
             })}
           </ul>
         </div>
-        );
-      })}
+      ))}
     </nav>
   );
 }
@@ -182,7 +175,7 @@ export function MobileNav() {
         </div>
         {/* The two preferences the top bar has no room for on a phone. */}
         <div className="hairline-t p-4 flex flex-col gap-3 shrink-0">
-          <RoleSwitcher variant="block" />
+          <UserMenu variant="block" />
           <LocaleToggle block />
         </div>
       </div>

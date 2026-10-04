@@ -14,12 +14,15 @@ import { PageHeader, StatTile, DetailRow, EmptyState } from "@/components/ui/pag
 import { Badge, Card, CardHeader, Num, LinkButton } from "@/components/ui/primitives";
 import { IconCart, IconChart, IconCheck, IconCoins } from "@/components/ui/icons";
 import type { MessageKey } from "@/lib/i18n";
+import { requireAccess } from "@/lib/auth/server";
+import { RecordHistory } from "@/components/app/record-history";
 
 export default async function SupplierPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireAccess("purchasing", "view");
   const { id } = await params;
   const { locale, t } = await getI18n();
   const db = await snapshot();
@@ -74,7 +77,7 @@ export default async function SupplierPage({
         <StatTile label={t("nav.purchases")} value={String(orders.length)} icon={IconCart} />
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-1 h-fit">
           <CardHeader title={t("label.company")} />
           <div className="px-3 py-1 divide-y divide-line">
@@ -163,7 +166,7 @@ export default async function SupplierPage({
                       <td className="h-10 px-3">
                         {t(`method.${p.method}` as MessageKey)}
                         {p.reference && (
-                          <Num className="text-2xs text-faint ms-2">{p.reference}</Num>
+                          <span className="ms-2"><Num className="text-2xs text-faint">{p.reference}</Num></span>
                         )}
                       </td>
                       <td className="h-10 px-3 text-end w-32">
@@ -177,6 +180,8 @@ export default async function SupplierPage({
           </Card>
         </div>
       </div>
+      <RecordHistory collection="suppliers" id={id} area="purchasing" />
+
     </>
   );
 }

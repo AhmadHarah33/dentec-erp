@@ -15,6 +15,7 @@ import type { MessageKey } from "@/lib/i18n";
 import { SERVICE_STATUSES, SERVICE_TONE, localName, serviceKey } from "@/lib/labels";
 import { formatMoney, formatNumber } from "@/lib/money";
 import { formatDate } from "@/lib/dates";
+import { warrantyState } from "@/lib/warranty";
 import { jobIsBillable } from "@/lib/service";
 import { saveJob, consumeParts, setJobStatus } from "@/app/actions/service";
 import { invoiceJob, orderShortage } from "@/app/actions/service-workflow";
@@ -34,6 +35,9 @@ import {
 } from "@/components/ui/primitives";
 import { IconAlert, IconCart, IconDocument } from "@/components/ui/icons";
 import { Modal, Confirm } from "@/components/ui/modal";
+import { useToast } from "@/components/ui/toast";
+import { useCan } from "@/components/app/member-context";
+import { RecordHistory } from "@/components/app/record-history";
 
 /** A shortage row, already resolved to a name by the server page. */
 interface NamedShortage {
@@ -45,6 +49,7 @@ interface NamedShortage {
 }
 
 export function JobClient({
+  unit,
   job,
   customer,
   shortages,
@@ -56,6 +61,8 @@ export function JobClient({
   onHand: onHandRecord,
   locale,
 }: {
+  /** The registered machine this job is for, when it was sold through the ERP. */
+  unit: { soldAt: string | null; warrantyEnd: string | null; invoice: { id: string; number: string } | null } | null;
   job: ServiceJob;
   customer: Customer | undefined;
   shortages: NamedShortage[];
@@ -68,6 +75,12 @@ export function JobClient({
   locale: string;
 }) {
   const t = useT();
+  // A technician runs the job; raising its invoice and ordering its parts
+  // belong to other areas of the permission table.
+  const canEdit = useCan("service", "edit");
+  const canInvoice = useCan("invoices", "limited");
+  const canOrder = useCan("purchasing", "edit");
+  const toast = useToast();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [parts, setParts] = useState(job.parts);
@@ -110,6 +123,7 @@ export function JobClient({
       });
 
       if (result.ok) {
+        toast(t("msg.saved"));
         setEditDiagnosisOpen(false);
       } else {
         setError(t(result.errorKey as MessageKey));
@@ -143,6 +157,7 @@ export function JobClient({
       });
 
       if (result.ok) {
+        toast(t("msg.saved"));
         setAddPartForm({
           itemId: "",
           qty: 1,
@@ -246,7 +261,7 @@ export function JobClient({
                 <Num>{invoice.number}</Num>
               </Link>
             ) : (
-              billable && (
+              billable && canInvoice && (
                 <Button variant="primary" onClick={submitInvoice} disabled={pending}>
                   <IconDocument size={15} />
                   {t("service.createInvoice")}
@@ -268,18 +283,19 @@ export function JobClient({
             <button
               key={status}
               onClick={() => submitChangeStatus(status)}
+              aria-current={isCurrentStatus ? "step" : undefined}
               className={`
-                flex-shrink-0 px-3 py-1.5 rounded-sm border text-xs font-medium
+                flex-shrink-0 h-10 px-3.5 rounded-sm border text-xs font-medium
                 transition-colors
                 ${
                   isCurrentStatus
-                    ? "bg-accent-soft text-accent border-accent"
+                    ? "bg-accent text-white border-accent font-semibold"
                     : isCompleted
                       ? "text-muted border-line bg-surface"
                       : "text-ink border-line bg-surface hover:bg-sunken"
                 }
               `}
-              disabled={pending}
+              disabled={pending || !canEdit}
             >
               {t(serviceKey(status))}
             </button>
@@ -302,10 +318,12 @@ export function JobClient({
             </p>
             <p className="text-2xs text-warn/70 mt-1">{t("service.shortageHint")}</p>
           </div>
-          <Button variant="primary" onClick={submitOrderShortage} disabled={pending}>
+          {canOrder && (
+<Button variant="primary" onClick={submitOrderShortage} disabled={pending}>
             <IconCart size={15} />
             {t("service.orderShortage")}
           </Button>
+)}
         </div>
       )}
 
@@ -314,7 +332,7 @@ export function JobClient({
       {/* min-w-0 on both children is load-bearing: a grid item defaults to
           min-width:auto, so without it the parts table below refuses to shrink
           and stretches the whole page wider than the phone. */}
-      <div className="grid lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Details Card ----------------------------------------- */}
         <Card className="lg:col-span-1 min-w-0">
           <CardHeader title={t("page.service.title")} />
@@ -339,6 +357,29 @@ export function JobClient({
                 {t(job.underWarranty ? "label.active" : "label.inactive")}
               </Badge>
             </DetailRow>
+            {unit && (
+              <>
+                <DetailRow label={t("serial.soldOn")}>
+                  <Num>{formatDate(unit.soldAt, locale)}</Num>
+                  {unit.invoice && (
+                    <>
+                      {" · "}
+                      <Link href={`/invoices/${unit.invoice.id}`} className="text-accent hover:underline">
+                        <Num>{unit.invoice.number}</Num>
+                      </Link>
+                    </>
+                  )}
+                </DetailRow>
+                <DetailRow label={t("serial.warrantyEnd")}>
+                  <Num>{unit.warrantyEnd ? formatDate(unit.warrantyEnd, locale) : "—"}</Num>
+                  {unit.warrantyEnd && (
+                    <Badge tone={warrantyState({ warrantyEnd: unit.warrantyEnd }, job.date) === "active" ? "success" : "muted"}>
+                      {t(warrantyState({ warrantyEnd: unit.warrantyEnd }, job.date) === "active" ? "serial.inWarranty" : "serial.expired")}
+                    </Badge>
+                  )}
+                </DetailRow>
+              </>
+            )}
             <DetailRow label={t("label.laborCharge")}>
               <Num>{money(job.laborCharge)}</Num>
             </DetailRow>
@@ -362,7 +403,8 @@ export function JobClient({
               <p className="text-2xs font-medium text-muted">
                 {t("label.diagnosis")}
               </p>
-              <Button
+              {canEdit && (
+<Button
                 size="sm"
                 variant="ghost"
                 onClick={() => {
@@ -373,6 +415,7 @@ export function JobClient({
               >
                 {t("action.edit")}
               </Button>
+)}
             </div>
             <p className="text-2xs leading-relaxed text-ink">
               {job.diagnosis || "—"}
@@ -400,13 +443,13 @@ export function JobClient({
                       <th className="h-10 px-3 text-start font-medium">
                         {t("label.name")}
                       </th>
-                      <th className="h-10 px-3 text-start font-medium">
+                      <th className="h-10 px-3 text-start font-medium hidden md:table-cell">
                         {t("label.warehouse")}
                       </th>
                       <th className="h-10 px-3 text-end font-medium">
                         {t("label.qty")}
                       </th>
-                      <th className="h-10 px-3 text-end font-medium">
+                      <th className="h-10 px-3 text-end font-medium hidden md:table-cell">
                         {t("label.unitPrice")}
                       </th>
                       <th className="h-10 px-3 text-end font-medium">
@@ -434,12 +477,10 @@ export function JobClient({
                               <div className="text-xs font-medium">
                                 {localName(item, locale)}
                               </div>
-                              <div className="text-2xs text-muted">
-                                {item?.sku || "—"}
-                              </div>
+                              <Num className="text-2xs text-muted">{item?.sku || "—"}</Num>
                             </div>
                           </td>
-                          <td className="h-10 px-3 text-start text-2xs text-muted">
+                          <td className="h-10 px-3 text-start text-2xs text-muted hidden md:table-cell">
                             {localName(warehouse, locale)}
                           </td>
                           <td className="h-10 px-3 text-end">
@@ -447,7 +488,7 @@ export function JobClient({
                               {formatNumber(part.qty, locale)}
                             </Num>
                           </td>
-                          <td className="h-10 px-3 text-end">
+                          <td className="h-10 px-3 text-end hidden md:table-cell">
                             <Num className="text-2xs">{money(part.unitPrice)}</Num>
                           </td>
                           <td className="h-10 px-3 text-end">
@@ -461,7 +502,7 @@ export function JobClient({
                             </Badge>
                           </td>
                           <td className="h-10 px-3 text-center">
-                            {!part.consumed && (
+                            {!part.consumed && canEdit && (
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -481,7 +522,8 @@ export function JobClient({
             )}
 
             {/* Add Part Row ---------------------------------------- */}
-            <div className="px-3 py-2 hairline-t bg-sunken/30 grid sm:grid-cols-12 gap-2 items-end">
+            {canEdit && (
+<div className="px-3 py-2 hairline-t bg-sunken/30 grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
               <div className="sm:col-span-4">
                 <Field label={t("label.name")} className="text-2xs">
                   <Select
@@ -555,31 +597,23 @@ export function JobClient({
                 </Button>
               </div>
             </div>
+)}
 
             {/* Totals Line ----------------------------------------- */}
-            <div className="px-3 py-2 hairline-t flex items-center justify-between">
-              <div className="text-xs font-medium">
-                {job.underWarranty ? (
-                  <span className="text-muted">
-                    {t("label.total")}:{" "}
-                    <Num className="line-through text-faint">
-                      {money(totals.jobTotal)}
-                    </Num>{" "}
-                    <span className="text-accent">{money(0)}</span>
-                  </span>
-                ) : (
-                  <span>
-                    {t("label.total")}:{" "}
-                    <Num className="text-accent font-medium">
-                      {money(totals.jobTotal)}
-                    </Num>
-                  </span>
-                )}
-              </div>
+            <div className="px-4 h-12 hairline-t flex items-center justify-between gap-3 text-xs">
+              <span className="font-medium text-muted">{t("label.total")}</span>
+              {job.underWarranty ? (
+                <span className="flex items-baseline gap-2">
+                  <Num className="line-through text-faint">{money(totals.jobTotal)}</Num>
+                  <Num className="font-semibold text-ink">{money(0)}</Num>
+                </span>
+              ) : (
+                <Num className="font-semibold text-ink">{money(totals.jobTotal)}</Num>
+              )}
             </div>
 
             {/* Confirm Parts Button -------------------------------- */}
-            {hasUnconsumedParts && (
+            {hasUnconsumedParts && canEdit && (
               <div className="px-3 py-2 hairline-t">
                 <Button
                   variant="primary"
@@ -594,6 +628,8 @@ export function JobClient({
           </Card>
         </div>
       </div>
+
+      <RecordHistory collection="serviceJobs" id={job.id} area="service" />
 
       {/* Edit Diagnosis Modal ---------------------------------------- */}
       <Modal

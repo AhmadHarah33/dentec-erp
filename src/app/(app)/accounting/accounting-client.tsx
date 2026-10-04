@@ -21,7 +21,7 @@ import { formatMoney, formatMoneyCompact } from "@/lib/money";
 import { formatDate, today } from "@/lib/dates";
 import { savePayment, deletePayment, saveExpense, deleteExpense } from "@/app/actions/finance";
 import { PageHeader, StatTile } from "@/components/ui/page";
-import { IconCoins, IconArrowDown, IconArrowUp, IconDocument } from "@/components/ui/icons";
+import { IconCoins, IconArrowDown, IconArrowUp, IconDocument, IconPlus } from "@/components/ui/icons";
 import {
   Badge,
   Button,
@@ -37,6 +37,9 @@ import { DataTable, type Column } from "@/components/ui/table";
 import { Modal, Confirm } from "@/components/ui/modal";
 import { StackBar } from "@/components/ui/charts";
 import { paymentBase, expenseBase } from "@/lib/queries";
+import { DateInput } from "@/components/ui/date-input";
+import { useToast } from "@/components/ui/toast";
+import { useCan } from "@/components/app/member-context";
 
 interface PaymentForm {
   date: string;
@@ -83,6 +86,8 @@ export function AccountingClient({
   locale: string;
 }) {
   const t = useT();
+  const canEdit = useCan("finance", "edit");
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
 
   // Tab state
@@ -250,6 +255,7 @@ export function AccountingClient({
       });
 
       if (result.ok) {
+        toast(t("msg.saved"));
         setPaymentModalOpen(false);
       } else {
         setPaymentError(t(result.errorKey as MessageKey));
@@ -265,6 +271,7 @@ export function AccountingClient({
         deletePaymentConfirm.invoiceId,
       );
       if (result.ok) {
+        toast(t("msg.deleted"));
         setDeletePaymentConfirm(null);
       }
     });
@@ -323,6 +330,7 @@ export function AccountingClient({
       });
 
       if (result.ok) {
+        toast(t("msg.saved"));
         setExpenseModalOpen(false);
       } else {
         setExpenseError(t(result.errorKey as MessageKey));
@@ -335,6 +343,7 @@ export function AccountingClient({
     startTransition(async () => {
       const result = await deleteExpense(deleteExpenseConfirm.id);
       if (result.ok) {
+        toast(t("msg.deleted"));
         setDeleteExpenseConfirm(null);
       }
     });
@@ -349,7 +358,8 @@ export function AccountingClient({
       sort: (p) => p.date + p.createdAt,
       render: (p) => (
         <button
-          onClick={() => openEditPayment(p)}
+          onClick={() => canEdit && openEditPayment(p)}
+          disabled={!canEdit}
           className="text-2xs text-muted hover:text-accent hover:underline text-start"
         >
           <Num>{formatDate(p.date, locale)}</Num>
@@ -453,7 +463,8 @@ export function AccountingClient({
       sort: (e) => e.date + e.createdAt,
       render: (e) => (
         <button
-          onClick={() => openEditExpense(e)}
+          onClick={() => canEdit && openEditExpense(e)}
+          disabled={!canEdit}
           className="text-2xs text-muted hover:text-accent hover:underline text-start"
         >
           <Num>{formatDate(e.date, locale)}</Num>
@@ -568,6 +579,20 @@ export function AccountingClient({
       <PageHeader
         title={t("page.accounting.title")}
         subtitle={t("page.accounting.subtitle")}
+        actions={
+          // The add button follows the tab. It used to exist only inside the
+          // empty-list message, so once one payment was recorded there was no
+          // way to record a second.
+          canEdit && activeTab !== "aging" && (
+            <Button
+              variant="primary"
+              onClick={activeTab === "payments" ? openNewPayment : openNewExpense}
+            >
+              <IconPlus />
+              {t(activeTab === "payments" ? "page.accounting.newPayment" : "page.accounting.newExpense")}
+            </Button>
+          )
+        }
       />
 
       {/* Stats */}
@@ -619,9 +644,11 @@ export function AccountingClient({
           pageSize={30}
           emptyTitle={t("empty.payments")}
           emptyAction={
-            <Button variant="primary" onClick={openNewPayment}>
-              {t("page.accounting.newPayment")}
-            </Button>
+            canEdit && (
+              <Button variant="primary" onClick={openNewPayment}>
+                {t("page.accounting.newPayment")}
+              </Button>
+            )
           }
           filters={
             <>
@@ -648,21 +675,19 @@ export function AccountingClient({
                   </option>
                 ))}
               </Select>
-              <Input
-                type="date"
+              <DateInput
                 value={paymentFrom}
-                onChange={(e) => setPaymentFrom(e.target.value)}
-                placeholder={t("label.date")}
-                dir="ltr"
-                className="w-32"
+                placeholder={t("label.fromDate")}
+                onChange={(v) => setPaymentFrom(v)}
+                className="w-40"
+                clearable
               />
-              <Input
-                type="date"
+              <DateInput
                 value={paymentTo}
-                onChange={(e) => setPaymentTo(e.target.value)}
-                placeholder={t("label.date")}
-                dir="ltr"
-                className="w-32"
+                placeholder={t("label.toDate")}
+                onChange={(v) => setPaymentTo(v)}
+                className="w-40"
+                clearable
               />
             </>
           }
@@ -678,9 +703,11 @@ export function AccountingClient({
           pageSize={30}
           emptyTitle={t("empty.expenses")}
           emptyAction={
-            <Button variant="primary" onClick={openNewExpense}>
-              {t("page.accounting.newExpense")}
-            </Button>
+            canEdit && (
+              <Button variant="primary" onClick={openNewExpense}>
+                {t("page.accounting.newExpense")}
+              </Button>
+            )
           }
           filters={
             <>
@@ -697,21 +724,19 @@ export function AccountingClient({
                   </option>
                 ))}
               </Select>
-              <Input
-                type="date"
+              <DateInput
                 value={expenseFrom}
-                onChange={(e) => setExpenseFrom(e.target.value)}
-                placeholder={t("label.date")}
-                dir="ltr"
-                className="w-32"
+                placeholder={t("label.fromDate")}
+                onChange={(v) => setExpenseFrom(v)}
+                className="w-40"
+                clearable
               />
-              <Input
-                type="date"
+              <DateInput
                 value={expenseTo}
-                onChange={(e) => setExpenseTo(e.target.value)}
-                placeholder={t("label.date")}
-                dir="ltr"
-                className="w-32"
+                placeholder={t("label.toDate")}
+                onChange={(v) => setExpenseTo(v)}
+                className="w-40"
+                clearable
               />
             </>
           }
@@ -828,13 +853,11 @@ export function AccountingClient({
             {paymentError}
           </div>
         )}
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label={t("label.date")} required>
-            <Input
-              type="date"
+            <DateInput
               value={paymentForm.date}
-              onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })}
-              dir="ltr"
+              onChange={(v) => setPaymentForm({ ...paymentForm, date: v })}
             />
           </Field>
           <Field label={t("label.type")} required>
@@ -978,13 +1001,11 @@ export function AccountingClient({
             {expenseError}
           </div>
         )}
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label={t("label.date")} required>
-            <Input
-              type="date"
+            <DateInput
               value={expenseForm.date}
-              onChange={(e) => setExpenseForm({ ...expenseForm, date: e.target.value })}
-              dir="ltr"
+              onChange={(v) => setExpenseForm({ ...expenseForm, date: v })}
             />
           </Field>
           <Field label={t("label.category")} required>

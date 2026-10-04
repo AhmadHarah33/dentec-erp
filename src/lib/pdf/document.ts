@@ -66,10 +66,13 @@ export async function loadDocument(
   // the job this invoice was raised from. Untracked lines print a dash rather
   // than a guess.
   const serials: Record<string, string> = {};
+  for (const line of invoice.lines) {
+    if (line.serials?.length) serials[line.id] = line.serials.join(", ");
+  }
   const job = db.serviceJobs.find((j) => j.invoiceId === invoice.id);
   if (job?.serialNo && job.machineItemId) {
     for (const line of invoice.lines) {
-      if (line.itemId === job.machineItemId) serials[line.id] = job.serialNo;
+      if (line.itemId === job.machineItemId && !serials[line.id]) serials[line.id] = job.serialNo;
     }
   }
 

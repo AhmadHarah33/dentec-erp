@@ -2,8 +2,15 @@ import { snapshot } from "@/lib/data/repository";
 import { getI18n } from "@/lib/i18n/server";
 import { buildStockIndex, onHand } from "@/lib/stock";
 import { ReportsClient } from "./reports-client";
+import { requireAccess } from "@/lib/auth/server";
+import { can } from "@/lib/permissions";
 
 export default async function ReportsPage() {
+  const member = await requireAccess("reports", "limited");
+  // Sales sees sales figures only. Costs are removed here, before the data
+  // leaves the server — hiding a column would still ship the numbers to the
+  // browser, where anyone can read them in the developer tools.
+  const full = can(member.role, "reports", "edit");
   const { locale } = await getI18n();
   const db = await snapshot();
 
@@ -24,7 +31,8 @@ export default async function ReportsPage() {
   return (
     <ReportsClient
       invoices={db.salesInvoices}
-      items={db.items}
+      items={full ? db.items : db.items.map((item) => ({ ...item, cost: 0 }))}
+      full={full}
       customers={db.customers}
       stock={stock}
       lastMoveDate={lastMoveDate}

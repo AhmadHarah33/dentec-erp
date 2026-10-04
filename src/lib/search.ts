@@ -8,7 +8,8 @@
  * action — callers do not change.
  */
 
-import type { Database } from "./data/types";
+import type { Database, Role } from "./data/types";
+import { can, type Area } from "./permissions";
 
 export type SearchKind = "invoice" | "customer" | "supplier" | "item" | "job";
 
@@ -25,7 +26,16 @@ export interface SearchEntry {
 
 const norm = (s: string) => s.toLowerCase().trim();
 
-export function buildSearchIndex(db: Database, locale: string): SearchEntry[] {
+/** The area a search result belongs to; a role that cannot view it never receives it. */
+const KIND_AREA: Record<SearchKind, Area> = {
+  invoice: "invoices",
+  customer: "customers",
+  supplier: "purchasing",
+  item: "catalog",
+  job: "service",
+};
+
+export function buildSearchIndex(db: Database, locale: string, role: Role): SearchEntry[] {
   const customerName = (id: string) => db.customers.find((c) => c.id === id)?.name ?? "";
   const itemName = (i: { nameAr: string; nameTr: string }) =>
     locale === "tr" && i.nameTr ? i.nameTr : i.nameAr;
@@ -85,7 +95,7 @@ export function buildSearchIndex(db: Database, locale: string): SearchEntry[] {
     });
   }
 
-  return entries;
+  return entries.filter((e) => can(role, KIND_AREA[e.kind], "view"));
 }
 
 /** Ranked matches: a prefix hit beats a hit buried in the middle of a field. */

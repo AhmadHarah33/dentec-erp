@@ -3,34 +3,38 @@
 Inventory, sales, purchasing, service and light accounting for a dental
 equipment business. Arabic-first (RTL), Turkish ready.
 
-## Running it
+## Running it locally
+
+The app needs Postgres. For development there is a throwaway one that runs
+inside Node — no Docker, nothing installed, gone when you stop it:
 
 ```bash
-npm run dev      # http://localhost:3000
-npm run build && npm start
+npm run db:dev        # empty database on 127.0.0.1:54329, schema applied
+npm run dev           # http://localhost:3000, reads .env.local
 ```
 
-On first start the app writes `data/dentec.json` with twelve months of
-realistic demo data. Delete that file to start clean; Settings → إعادة تعيين
-lays the demo data down again.
+`.env.local` (gitignored) points the app at it:
 
-## Deploying to your own server
+```
+DATABASE_URL=postgres://postgres@127.0.0.1:54329/postgres
+DATABASE_POOL_SIZE=1
+```
+
+`npm run test:store` runs the storage checks against that empty database.
+
+There is no sample data. A fresh install starts with company settings and one
+warehouse, and the dashboard shows a getting-started checklist until the
+basics are in.
+
+## Production
+
+The database is the self-hosted Supabase on the ZimaOS server. Deployment
+steps live in `RELEASE-PLAN.md` (Phase 5) until `DEPLOY.md` is written.
+Schema changes are SQL files in `supabase/migrations/`, applied once each by:
 
 ```bash
-npm ci
-npm run build
-DENTEC_DATA_DIR=/var/lib/dentec npm start
+DATABASE_ADMIN_URL=postgres://postgres:<pw>@<host>:5432/postgres npm run db:migrate
 ```
-
-Then put a tunnel in front (`cloudflared tunnel --url http://localhost:3000`,
-or Tailscale Funnel).
-
-> **There is no login.** Anyone who can reach the tunnel URL has full access,
-> accounting included. Put Cloudflare Access or a Tailscale ACL in front of it
-> until Supabase Auth is added. The roles on the Users page organise the team;
-> they do not restrict anything yet.
-
-Back up by copying the data directory. That is the whole database.
 
 ## How it is put together
 
@@ -41,18 +45,19 @@ Back up by copying the data directory. That is the whole database.
 
 ### Storage
 
-Everything lives in one JSON file behind `src/lib/data/repository.ts`. Pages and
-actions import from there and never touch the filesystem, so moving to Supabase
-means writing one adapter and changing one line in `src/lib/data/store.ts`.
+Postgres, in a private `erp` schema that Supabase's public API does not
+expose, with row-level security on every table. Pages and actions still go
+through `src/lib/data/repository.ts` and see one `Database` object;
+`src/lib/data/store.ts` is the only file that knows about SQL.
 
-Writes are serialised through a queue and committed atomically (temp file +
-rename), and a document plus its stock moves are written in a single
-transaction — issuing an invoice cannot half-succeed.
-
-Store state is held on `globalThis`. Next bundles server components and server
-actions separately, and a module-level cache is instantiated once per bundle;
-without the global you get two copies and an invoice you just issued keeps
-rendering as a draft.
+- **Reads** cache what was loaded and ask `erp.table_versions` (bumped by a
+  trigger on every write) which tables changed — one small query per read.
+- **Writes** take an advisory lock, re-read inside it, let the action change a
+  private copy, and write only the rows that differ, in one transaction. An
+  invoice and its stock moves land together or not at all, and a failed
+  action leaves nothing behind.
+- `src/lib/data/schema-map.ts` maps each type in `types.ts` to its table.
+  A field added to a type must be added there too, or it is not stored.
 
 ### Stock is a ledger
 
@@ -93,7 +98,9 @@ stripped of the bidi control marks `Intl` injects, which otherwise scramble
 ```
 src/app/(app)/       one folder per route: page.tsx (server) + *-client.tsx
 src/app/actions/     server actions, grouped by domain
-src/lib/data/        types, repository, JSON store, seed
+src/lib/data/        types, repository, Postgres store, schema map
+supabase/migrations/ SQL schema, applied by scripts/migrate.ts
+scripts/             dev database, migration runner, self-checks
 src/lib/             money, stock, dates, queries, i18n, labels
 src/components/ui/   the design system
 src/components/app/  shared feature components
@@ -103,7 +110,8 @@ src/components/app/  shared feature components
 
 ## Known gaps
 
-- No authentication (see the warning above).
+- No authentication yet (release Phase 3).
 - Purchase orders receive in full only — no partial receipts yet.
 - Stock is valued at standard cost, not moving average. The Reports page says so.
-- JSON storage suits a small team; it is not built for heavy concurrent writes.
+- Writes are serialised by one advisory lock: right for a small team, not for
+  hundreds of concurrent writers.

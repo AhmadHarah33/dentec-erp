@@ -1,4 +1,36 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="65 210 146 146">
-  <path fill="#1a224d" d="M172.51,240.76h-69.26v84.25h69.26c8.28,0,15-6.71,15-15v-54.25c0-8.29-6.72-15-15-15ZM167.59,305.35h-44.68v-44.68h44.68v44.68Z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <style>
+      :root { --a: #2c3a86; --b: #141a3d; --fg: #fff; --sheen: .14; }
+      @media (prefers-color-scheme: light) {
+        :root { --a: #f3f5ff; --b: #d3dbff; --fg: #1a224d; --sheen: 0; }
+      }
+      .s1 { stop-color: var(--a); } .s2 { stop-color: var(--b); }
+      .fg { fill: var(--fg); } .fgs { stroke: var(--fg); }
+    </style>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop class="s1" offset="0"/><stop class="s2" offset="1"/></linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".14"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <!-- the ring: a crescent, thicker at the lower left than the upper right -->
+    <path id="ring" fill-rule="evenodd" d="M256 256m-222 0a222 80 0 1 0 444 0a222 80 0 1 0-444 0ZM261 262m-210 0a210 66 0 1 0 420 0a210 66 0 1 0-420 0Z"/>
+    <ellipse id="thin" cx="250" cy="250" rx="232" ry="90" fill="none" stroke-width="5"/>
+    <mask id="cut" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <rect width="512" height="512" fill="#fff"/>
+      <g transform="rotate(-22 256 256)" fill="#000" stroke="#000" stroke-width="12" stroke-linejoin="round">
+        <use href="#ring"/><use href="#thin" stroke="#000"/>
+      </g>
+    </mask>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="116" fill="url(#sheen)" style="opacity:var(--sheen)"/>
+  <!-- a heavy geometric "d": bowl plus stem -->
+  <g class="fg" mask="url(#cut)">
+    <path fill-rule="evenodd" d="M240 400a108 108 0 1 0 0-216a108 108 0 1 0 0 216ZM240 344a52 52 0 1 1 0-104a52 52 0 1 1 0 104Z"/>
+    <rect x="296" y="96" width="60" height="304"/>
+  </g>
+  <g class="fg" transform="rotate(-22 256 256)">
+    <use href="#ring"/><use href="#thin" class="fgs"/>
+  </g>
 </svg>

@@ -54,8 +54,24 @@ size sm|md), `LinkButton`, `Input`, `NumberInput`, `Select`, `Textarea`, `Field`
 `@/components/ui/page` — `PageHeader` (title/subtitle/actions), `StatTile`
 (label/value/meta/delta/tone/icon/chip/href), `ListCard` + `ListRow` (a queue
 with a "view all" foot), `EmptyState`, `DetailRow`, `SectionTitle`, `Toolbar`.
-A `StatTile` should carry an `icon` and, when it can be judged good or bad, a
-`chip` — the tile is meant to be read without reading its label.
+A `StatTile` reads label → figure → verdict. The figure is always ink; when it
+can be judged good or bad, pass a `tone` and a `chip`, which render as a status
+dot on the meta line. The `icon` is a quiet wayfinding glyph and never takes a
+tone — no tinted icon squares, no coloured figures. The dashboard's `KpiTile`,
+`AttentionCard` and `DashCard` are names over this same kit, not a second style.
+
+`@/components/ui/date-input` — `DateInput` (value/onChange as ISO strings,
+`placeholder`, `clearable` for filters). **Never use a bare `type="date"`:** it
+paints in the OS locale, so an Arabic form shows `mm/dd/yyyy` on English
+Windows.
+
+`@/components/ui/toast` — `useToast()` → `toast(t("msg.saved"))` after a
+mutation whose result the screen does not already show (a dialog that closed,
+a row that vanished). Errors that block a task stay inline beside the form.
+
+Every route under `(app)` inherits `loading.tsx` (a skeleton),
+`error.tsx` (retry, shell kept) and `not-found.tsx`; `src/app/not-found.tsx`
+covers addresses outside every route.
 
 `@/components/ui/table` — `DataTable<T>` with `Column<T>` =
 `{key, header, align?, sort?, search?, render, width?, secondary?, tertiary?}`.
@@ -145,6 +161,28 @@ the default, so an `overflow-x-auto` wrapper inside a grid item does nothing:
 the item grows instead, and on a phone that widens the whole page. `Card` and
 the `DataTable` shell carry `min-w-0`; any new grid or flex wrapper around wide
 content needs it too. `main` also carries `overflow-x-clip` as a backstop.
+A responsive grid needs an explicit base column: `grid grid-cols-1
+lg:grid-cols-3`, never `grid lg:grid-cols-3` — without it the phone layout is
+one implicit `auto` column, which grows to fit a wide table no matter what
+`min-w-0` its children carry.
+
+**A logical margin on `<Num>` lands on the wrong side.** `.num` is `direction:
+ltr`, and logical properties resolve against an element's *own* direction, so
+`ms-2` on a Num is a left margin even in Arabic. Put the margin on a wrapper
+(`<span className="ms-2"><Num>…</Num></span>`) or use `gap` on the parent.
+
+**Latin text inside Arabic layout gets an inline isolate.** A name like
+"Siger Medical Co." in an RTL cell renders as ".Siger Medical Co" — the bidi
+algorithm moves trailing punctuation to the Arabic side. `DataTable` cells,
+`DetailRow` values and queue-row titles wrap their content in
+`<span className="[unicode-bidi:plaintext]">`. It must be an *inline* wrapper:
+`plaintext` on a block or a `<td>` also flips the alignment, pushing Latin
+names to the left edge of an Arabic column (measured, not assumed).
+
+**Identifier inputs are LTR.** Phone (`type="tel"`), email, SKU, tax ID and
+serial fields carry `dir="ltr"` (tel/email get it from CSS); a base rule
+right-aligns them inside an Arabic form. Do not add `text-start` — it would
+left-align them away from their labels.
 
 **Phones show three columns.** `secondary` is not optional decoration — a table
 with four default columns overflows at 390px. Identity on a phone is usually
@@ -190,8 +228,10 @@ startTransition(async () => {
 
 **Every user-visible string goes through `t("some.key")`.** Never hardcode Arabic
 or English in a component. Keys live in `src/lib/i18n/ar.ts` — read it first and
-reuse existing keys. If you genuinely need a new key, add it to `ar.ts` (and only
-`ar.ts`; Turkish falls back automatically).
+reuse existing keys. If you genuinely need a new key, add it to `ar.ts` **and**
+`tr.ts`: the Turkish dictionary is typed as a complete `Record<MessageKey,…>`,
+so a key missing there is a compile error. Digits in strings are Latin (`12
+شهراً`, not `١٢`), matching every figure the app renders.
 
 ## Visual rules — non-negotiable
 

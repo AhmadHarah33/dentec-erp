@@ -19,7 +19,8 @@ npx tsc --noEmit       # must be silent before you call anything done
 ## Non-negotiables
 
 - **Every user-visible string goes through `t()`.** Keys live in
-  `src/lib/i18n/ar.ts`. Reuse existing keys; add new ones only to `ar.ts`.
+  `src/lib/i18n/ar.ts`. Reuse existing keys; a new key goes in `ar.ts` and
+  `tr.ts` (Turkish is typed complete, so a missing key fails the build).
 - **Every number renders inside `<Num>`** — tabular figures + LTR isolation, or
   digits misalign in RTL tables.
 - **Logical CSS only**: `ms-/me-`, `ps-/pe-`, `start-/end-`, `text-start/end`.
@@ -31,6 +32,8 @@ npx tsc --noEmit       # must be silent before you call anything done
   filled buttons, active nav, links, chart data.
 - **A status never picks its own colour.** Map it to a `Tone` in
   `src/lib/labels.ts` and let the `Badge` render it.
+- **Never use a bare `<input type="date">`** — use `DateInput`; the native
+  one paints in the OS locale (`mm/dd/yyyy` on English Windows).
 - **Do not hardcode type sizes.** The scale lives in the `@theme` block of
   `globals.css`; `text-xs` is 14px body, `text-2xs` is 13px meta.
 - **Never pass a function from a server page to a client component.** Pass
@@ -40,8 +43,14 @@ npx tsc --noEmit       # must be silent before you call anything done
 
 - **Stock is an append-only ledger.** `stockMoves` is never mutated or deleted;
   on-hand is always derived by summing it. Corrections are opposing moves.
-- **All storage goes through `src/lib/data/repository.ts`.** Never touch the
-  filesystem from a page or action.
+- **All storage goes through `src/lib/data/repository.ts`.** Never query
+  Postgres from a page or action. The store (`store.ts`) is Postgres in the
+  private `erp` schema; `schema-map.ts` maps every field of `types.ts` to a
+  column — **a new field must be added there and in a migration**, or it is
+  silently not stored. Schema changes are new files in `supabase/migrations/`,
+  never edits to applied ones.
+- **The stock ledger is append-only in the database too**: a trigger rejects
+  UPDATE/DELETE on `erp.stock_moves`. A mutation that edits a move fails.
 - **Store state lives on `globalThis`** (`src/lib/data/store.ts`). Next bundles
   server components and server actions separately, so a module-level `let`
   gives you two caches and stale renders. Do not "simplify" this back.
@@ -62,6 +71,14 @@ npx tsc --noEmit       # must be silent before you call anything done
 
 ## Scope boundaries
 
-There is no authentication. Roles are organisational only. Do not add auth
-plumbing unless asked — it is planned to arrive with Supabase. The `ViewRole`
-cookie is a display preference and must not grow into a permission system.
+The ERP authenticates its own users (`src/lib/auth/`): scrypt passwords,
+hashed session cookies, invitation and reset links, roles enforced server-side
+through `src/lib/permissions.ts`. Every server action calls `guard()`; every
+page calls `requireAccess()`. Cost, margin and stock value are stripped on the
+server for roles that may not see them (`seesCost` / `withoutCost`).
+
+- Server actions read only named, validated fields (`src/lib/inputs.ts`) —
+  never spread the browser's object into a row — and run their state checks
+  inside the `transaction()` that writes.
+- Sign-in and "forgot password" are rate-limited per client in Postgres
+  (`src/lib/auth/limits.ts`); there is deliberately no per-account lockout.

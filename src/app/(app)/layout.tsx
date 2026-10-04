@@ -3,20 +3,25 @@ import { Topbar } from "@/components/app/topbar";
 import { snapshot } from "@/lib/data/repository";
 import { getLocale } from "@/lib/i18n/server";
 import { buildSearchIndex } from "@/lib/search";
-import { getViewRole } from "@/lib/roles.server";
-import { RoleProvider } from "@/components/app/role-context";
+import { requireMember } from "@/lib/auth/server";
+import { MemberProvider } from "@/components/app/member-context";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   // The search index is plain data, built once here and handed to the client
   // top bar. A function cannot cross this boundary, so the filtering lives in
   // the client component and only the rows travel.
+  // Every page under (app) is members-only. The middleware has already
+  // turned away requests with no session; this turns away sessions that do
+  // not belong to an active ERP member.
+  const member = await requireMember();
   const locale = await getLocale();
-  const role = await getViewRole();
   const db = await snapshot();
-  const search = buildSearchIndex(db, locale);
+  const search = buildSearchIndex(db, locale, member.role);
 
   return (
-    <RoleProvider role={role}>
+    <MemberProvider
+      member={{ id: member.user.id, name: member.user.name, email: member.email, role: member.role }}
+    >
       <div className="flex min-h-dvh">
         <Sidebar />
         <div className="flex-1 min-w-0 flex flex-col">
@@ -31,6 +36,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </main>
         </div>
       </div>
-    </RoleProvider>
+    </MemberProvider>
   );
 }

@@ -16,12 +16,20 @@ import { PageHeader, StatTile, DetailRow, EmptyState } from "@/components/ui/pag
 import { Badge, Card, CardHeader, Num, LinkButton } from "@/components/ui/primitives";
 import { IconCoins, IconChart, IconCheck, IconDocument } from "@/components/ui/icons";
 import type { MessageKey } from "@/lib/i18n";
+import { requireAccess } from "@/lib/auth/server";
+import { can } from "@/lib/permissions";
+import { RecordHistory } from "@/components/app/record-history";
+import { StatementCard } from "@/components/app/statement-card";
+import { warrantyState } from "@/lib/warranty";
+import { today } from "@/lib/dates";
+import { localName } from "@/lib/labels";
 
 export default async function CustomerPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const member = await requireAccess("customers", "view");
   const { id } = await params;
   const { locale, t } = await getI18n();
   const db = await snapshot();
@@ -42,6 +50,25 @@ export default async function CustomerPage({
     .filter((p) => p.partyType === "customer" && p.partyId === id)
     .sort((a, b) => (a.date < b.date ? 1 : -1));
 
+  const machines = db.units
+    .filter((u) => u.customerId === id)
+    .sort((a, b) => ((a.soldAt ?? "") < (b.soldAt ?? "") ? 1 : -1))
+    .map((unit) => {
+      const item = db.items.find((i) => i.id === unit.itemId);
+      return {
+        unit,
+        name: item ? localName(item, locale) : "—",
+        jobs: db.serviceJobs.filter((j) => j.unitId === unit.id).length,
+        invoiceNumber: db.salesInvoices.find((i) => i.id === unit.invoiceId)?.number ?? "",
+      };
+    });
+
+  // The page is for everyone who may see customers; the money on it follows
+  // the areas it comes from. A technician sees the company and its machines,
+  // not what it owes.
+  const seeInvoices = can(member.role, "invoices", "view");
+  const seeMoney = can(member.role, "finance", "view");
+
   const balance = customerBalance(id, db.salesInvoices, db.payments);
   const billed = invoices.filter(isLive).reduce((s, i) => s + invoiceTotalBase(i), 0);
   const received = payments.reduce((s, p) => s + paymentBase(p), 0);
@@ -55,14 +82,18 @@ export default async function CustomerPage({
         actions={
           <>
             <LinkButton href="/customers">{t("action.back")}</LinkButton>
-            <LinkButton href={`/invoices/new?customer=${customer.id}`} variant="primary">
-              {t("page.invoices.new")}
-            </LinkButton>
+            {can(member.role, "invoices", "limited") && (
+              <LinkButton href={`/invoices/new?customer=${customer.id}`} variant="primary">
+                {t("page.invoices.new")}
+              </LinkButton>
+            )}
           </>
         }
       />
 
+      {(seeInvoices || seeMoney) && (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        {seeMoney && (
         <StatTile
           label={t("label.balance")}
           value={money(balance)}
@@ -75,21 +106,27 @@ export default async function CustomerPage({
               : undefined
           }
         />
-        <StatTile label={t("report.revenue")} value={money(billed)} icon={IconChart} />
+        )}
+        {seeInvoices && <StatTile label={t("report.revenue")} value={money(billed)} icon={IconChart} />}
+        {seeMoney && (
         <StatTile
           label={t("label.paid")}
           value={money(received)}
           icon={IconCheck}
           tone="success"
         />
+        )}
+        {seeInvoices && (
         <StatTile
           label={t("nav.invoices")}
           value={String(invoices.length)}
           icon={IconDocument}
         />
+        )}
       </div>
+      )}
 
-      <div className="grid lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-1 h-fit">
           <CardHeader title={t("label.company")} />
           <div className="px-3 py-1 divide-y divide-line">
@@ -121,6 +158,7 @@ export default async function CustomerPage({
         </Card>
 
         <div className="lg:col-span-2 min-w-0 flex flex-col gap-4">
+          {seeInvoices && (
           <Card>
             <CardHeader title={t("nav.invoices")} meta={String(invoices.length)} />
             {invoices.length === 0 ? (
@@ -134,7 +172,7 @@ export default async function CustomerPage({
                       <th className="h-10 px-3 text-start font-medium">{t("label.date")}</th>
                       <th className="h-10 px-3 text-start font-medium">{t("label.status")}</th>
                       <th className="h-10 px-3 text-end font-medium">{t("label.total")}</th>
-                      <th className="h-10 px-3 text-end font-medium">{t("label.balance")}</th>
+                      {seeMoney && <th className="h-10 px-3 text-end font-medium">{t("label.balance")}</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -156,6 +194,7 @@ export default async function CustomerPage({
                         <td className="h-10 px-3 text-end">
                           <Num>{money(invoiceTotalBase(inv))}</Num>
                         </td>
+                        {seeMoney && (
                         <td className="h-10 px-3 text-end">
                           <Num
                             className={
@@ -167,6 +206,7 @@ export default async function CustomerPage({
                             {money(invoiceOutstanding(inv, db.payments))}
                           </Num>
                         </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -174,6 +214,7 @@ export default async function CustomerPage({
               </div>
             )}
           </Card>
+          )}
 
           <Card>
             <CardHeader title={t("nav.service")} meta={String(jobs.length)} />
@@ -203,6 +244,7 @@ export default async function CustomerPage({
             )}
           </Card>
 
+          {seeMoney && (
           <Card>
             <CardHeader title={t("page.accounting.payments")} meta={String(payments.length)} />
             {payments.length === 0 ? (
@@ -218,7 +260,7 @@ export default async function CustomerPage({
                       <td className="h-10 px-3">
                         {t(`method.${p.method}` as MessageKey)}
                         {p.reference && (
-                          <Num className="text-2xs text-faint ms-2">{p.reference}</Num>
+                          <span className="ms-2"><Num className="text-2xs text-faint">{p.reference}</Num></span>
                         )}
                       </td>
                       <td className="h-10 px-3 text-end w-32">
@@ -230,8 +272,42 @@ export default async function CustomerPage({
               </table>
             )}
           </Card>
+          )}
         </div>
       </div>
+      {machines.length > 0 && (
+        <Card className="mb-4">
+          <CardHeader title={t("serial.machines")} meta={String(machines.length)} />
+          <div className="divide-y divide-line">
+            {machines.map(({ unit, name, jobs: jobCount, invoiceNumber }) => {
+              const state = warrantyState(unit, today());
+              return (
+                <div key={unit.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-xs">
+                  <span className="font-medium">{name}</span>
+                  <Num className="text-muted">{unit.serialNo}</Num>
+                  <span className="text-2xs text-muted">
+                    {t("serial.soldOn")} <Num>{formatDate(unit.soldAt, locale)}</Num>
+                    {invoiceNumber && <> · <Num>{invoiceNumber}</Num></>}
+                  </span>
+                  <span className="ms-auto flex items-center gap-2">
+                    {jobCount > 0 && <span className="text-2xs text-muted"><Num>{jobCount}</Num> {t("nav.service")}</span>}
+                    <Badge tone={state === "active" ? "success" : "muted"}>
+                      {state === "none"
+                        ? t("serial.noWarranty")
+                        : `${t(state === "active" ? "serial.inWarranty" : "serial.expired")} · ${formatDate(unit.warrantyEnd, locale)}`}
+                    </Badge>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {can(member.role, "finance", "view") && <StatementCard customerId={customer.id} />}
+
+      <RecordHistory collection="customers" id={id} area="customers" />
+
     </>
   );
 }

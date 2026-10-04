@@ -3,7 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { create, remove, snapshot, update } from "@/lib/data/repository";
 import type { Category, Item } from "@/lib/data/types";
-import { fail, ok, type Result } from "./shared";
+import { guard } from "@/lib/auth/server";
+import { categoryInput, itemInput } from "@/lib/inputs";
+import { parse } from "@/lib/validate";
+import { attempt, fail, ok, type Result } from "./shared";
 
 type CategoryInput = Omit<Category, "id" | "createdAt" | "updatedAt">;
 type ItemInput = Omit<Item, "id" | "createdAt" | "updatedAt">;
@@ -18,16 +21,27 @@ function refresh(paths: string[]) {
 /* Categories                                                          */
 /* ------------------------------------------------------------------ */
 
-export async function saveCategory(
+async function saveCategoryImpl(
   id: string | null,
   input: CategoryInput,
 ): Promise<Result<string>> {
-  if (!input.nameAr.trim()) return fail("msg.requiredField");
+  const gate = await guard("catalog", "edit");
+  if (!gate.ok) return gate;
+  const parsed = parse(() => categoryInput(input));
+  if (!parsed.ok) return parsed;
+  const data = parsed.data;
+  if (!data.nameAr.trim()) return fail("msg.requiredField");
+
+  const known = await snapshot();
+  if (data.parentId && !known.categories.some((c) => c.id === data.parentId)) {
+    return fail("msg.error", "unknown-reference");
+  }
+  if (id && !known.categories.some((c) => c.id === id)) return fail("msg.error", "not-found");
 
   // A category cannot be its own parent, nor a descendant of itself.
-  if (id && input.parentId) {
-    const db = await snapshot();
-    let cursor: string | null = input.parentId;
+  if (id && data.parentId) {
+    const db = known;
+    let cursor: string | null = data.parentId;
     const seen = new Set<string>();
     while (cursor) {
       if (cursor === id) return fail("msg.error");
@@ -38,13 +52,15 @@ export async function saveCategory(
   }
 
   const row = id
-    ? await update("categories", id, input)
-    : await create("categories", input);
+    ? await update("categories", id, data)
+    : await create("categories", data);
   refresh(CATALOG_PATHS);
   return ok(row.id);
 }
 
-export async function deleteCategory(id: string): Promise<Result> {
+async function deleteCategoryImpl(id: string): Promise<Result> {
+  const gate = await guard("catalog", "edit");
+  if (!gate.ok) return gate;
   const db = await snapshot();
   if (db.items.some((i) => i.categoryId === id)) {
     return fail("msg.error", "category-in-use");
@@ -61,16 +77,25 @@ export async function deleteCategory(id: string): Promise<Result> {
 /* Items                                                               */
 /* ------------------------------------------------------------------ */
 
-export async function saveItem(id: string | null, input: ItemInput): Promise<Result<string>> {
-  if (!input.nameAr.trim() || !input.sku.trim()) return fail("msg.requiredField");
+async function saveItemImpl(id: string | null, input: ItemInput): Promise<Result<string>> {
+  const gate = await guard("catalog", "edit");
+  if (!gate.ok) return gate;
+  const parsed = parse(() => itemInput(input));
+  if (!parsed.ok) return parsed;
+  const data = parsed.data;
+  if (!data.nameAr.trim() || !data.sku.trim()) return fail("msg.requiredField");
 
   const db = await snapshot();
   const clash = db.items.find(
-    (i) => i.sku.toLowerCase() === input.sku.trim().toLowerCase() && i.id !== id,
+    (i) => i.sku.toLowerCase() === data.sku.trim().toLowerCase() && i.id !== id,
   );
   if (clash) return fail("msg.error", "duplicate-sku");
+  if (id && !db.items.some((i) => i.id === id)) return fail("msg.error", "not-found");
+  if (data.categoryId && !db.categories.some((c) => c.id === data.categoryId)) {
+    return fail("msg.error", "unknown-reference");
+  }
 
-  const row = id ? await update("items", id, input) : await create("items", input);
+  const row = id ? await update("items", id, data) : await create("items", data);
   refresh(CATALOG_PATHS);
   return ok(row.id);
 }
@@ -80,7 +105,9 @@ export async function saveItem(id: string | null, input: ItemInput): Promise<Res
  * orphan every stock move and invoice line that references it, and those are
  * the records the business actually needs to keep.
  */
-export async function deleteItem(id: string): Promise<Result<"deleted" | "archived">> {
+async function deleteItemImpl(id: string): Promise<Result<"deleted" | "archived">> {
+  const gate = await guard("catalog", "edit");
+  if (!gate.ok) return gate;
   const db = await snapshot();
   const referenced =
     db.stockMoves.some((m) => m.itemId === id) ||
@@ -99,3 +126,24 @@ export async function deleteItem(id: string): Promise<Result<"deleted" | "archiv
   return ok("deleted");
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Public actions. Each runs its implementation inside `attempt`, so an   */
+/* unexpected failure is returned as a Result rather than thrown.        */
+/* ------------------------------------------------------------------ */
+
+export async function saveCategory(...args: Parameters<typeof saveCategoryImpl>): ReturnType<typeof saveCategoryImpl> {
+  return attempt(() => saveCategoryImpl(...args));
+}
+
+export async function deleteCategory(...args: Parameters<typeof deleteCategoryImpl>): ReturnType<typeof deleteCategoryImpl> {
+  return attempt(() => deleteCategoryImpl(...args));
+}
+
+export async function saveItem(...args: Parameters<typeof saveItemImpl>): ReturnType<typeof saveItemImpl> {
+  return attempt(() => saveItemImpl(...args));
+}
+
+export async function deleteItem(...args: Parameters<typeof deleteItemImpl>): ReturnType<typeof deleteItemImpl> {
+  return attempt(() => deleteItemImpl(...args));
+}

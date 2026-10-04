@@ -1,0 +1,216 @@
+# Release plan — production release
+
+Agreed with the owner on 2026-10-03. Each phase ends at a checkpoint: work
+stops, results are shown, and the next phase starts only on approval.
+
+## Decisions
+
+| Area | Decision |
+|---|---|
+| Design | Refine the current identity (navy from the logo, Cairo, white, RTL). No new direction. |
+| Sample data | Deleted entirely: seed, JSON store, "reset demo data". No demo mode. |
+| Start data | Empty (company settings + one warehouse) plus an Excel/CSV import tool. |
+| Database | Self-hosted Supabase on the ZimaOS box (`10.240.0.1`, gateway on port 8001). |
+| Accounts | Email + password. Owner invites; no public sign-up. Roles enforced server-side. |
+| Reachability | App in Docker on the ZimaOS box, Cloudflare Tunnel, at **`erp.dentec.cloud`** (registered at Hostinger, DNS already on Cloudflare; apex is parked and kept free). Supabase stays private. |
+| Email | Auth emails sent as `no-reply@dentec.cloud` via an SMTP provider whose SPF/DKIM records go into Cloudflare DNS. |
+| Deploy access | SSH to the ZimaOS box with a dedicated key. |
+| Vercel | Project deleted after the self-hosted version is live and verified (confirmed again at that time). |
+| Extra features | Audit log, nightly backups, partial PO receipts, customer statement PDF, serial + warranty tracking. |
+
+## Role matrix (enforced in every server action and page)
+
+| | Owner | Accountant | Sales | Technician | Viewer |
+|---|---|---|---|---|---|
+| Dashboard, search | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Products, parts, categories | edit | view | view | view | view |
+| Inventory and stock moves | edit | view | view | consume parts | view |
+| Customers | edit | edit | edit | view | view |
+| Suppliers, purchase orders | edit | edit | view | — | view |
+| Invoices | edit | edit | create/issue | — | view |
+| Payments, expenses, accounting | edit | edit | — | — | view |
+| Service board | edit | view | view | edit | view |
+| Reports | ✓ | ✓ | sales only | — | ✓ |
+| Settings, users, import, audit log | ✓ | — | — | — | — |
+
+Void/delete of issued documents: owner and accountant only. Final table to be
+confirmed at the Phase 3 checkpoint.
+
+## Phase 0 — Access (owner actions, guided)
+
+1. Enable SSH on ZimaOS and authorise the deploy key.
+2. ~~Domain~~ — decided: `erp.dentec.cloud`.
+3. Create a Cloudflare Tunnel in Zero Trust and provide its token.
+4. Set up an SMTP provider (Brevo or Resend), verify `dentec.cloud` with its
+   DNS records in Cloudflare, and enter the SMTP details in the Supabase `.env`
+   on the server. Sender: `no-reply@dentec.cloud`.
+
+Over SSH, the Supabase keys and the Postgres password are read from the
+server's own Supabase `.env`. Secrets are kept only in server-side env files,
+never committed.
+
+## Phase 1 — Design pass ✅ done 2026-10-03, awaiting owner approval
+
+- Screenshot audit of all routes at 390px and 1280px, AR and TR.
+- KPI tiles: no truncated labels, fewer chips, calmer colour, one clear figure.
+- One number format everywhere (currency position, compact suffixes).
+- A localised date picker to replace the browser's English `mm/dd/yyyy`.
+- Tables: density, alignment, sticky headers, better row hover and focus.
+- Forms: grouping, field widths, inline validation, consistent action bar.
+- Service board: card layout, readable at phone width.
+- Loading skeletons (`loading.tsx`), error pages (`error.tsx`), 404, empty states.
+- Toast feedback after every save, issue, receive and delete.
+- Keyboard focus rings and contrast checks.
+- **Checkpoint:** before/after screenshots.
+
+## Phase 2 — Supabase schema and adapter ✅ 2026-10-03, awaiting owner approval
+
+- SQL migrations in `supabase/migrations/`, one table per collection plus child
+  tables for document lines, `numeric(14,2)` money, real foreign keys.
+- `stock_moves` is append-only, enforced in the database (a trigger rejects
+  UPDATE/DELETE), not just by convention.
+- ~~Per-type sequences~~ — not needed: writes are serialised by a
+  transaction-scoped advisory lock and `number` is UNIQUE, so two users can
+  never mint the same document number.
+- A new adapter behind `repository.ts` uses a direct server-side Postgres
+  connection, so `transaction()` is a real BEGIN/COMMIT. An invoice and its
+  stock moves still land together or not at all.
+- RLS is enabled on every table. The browser never talks to the database.
+- Removed: `seed.ts`, the JSON `store.ts`, `data/`, the reset button and the
+  Vercel read-only workarounds. Settings shows the database status instead of a
+  data folder.
+- **Checkpoint:** every workflow passes against an empty Supabase.
+
+### Server state after Phase 2
+
+- `erp` schema installed in the `postgres` database (migration 0001, recorded
+  in `erp.schema_migrations`). Empty apart from settings and one warehouse.
+- Role `dentec_app`: login, password in
+  `/DATA/AppData/dentec-erp/secrets/dentec_app_db_password` (mode 600, never
+  printed). Network logins require it (scram); it cannot read `public`,
+  `auth` or any Supabase schema, and cannot update or delete stock moves.
+- Backup taken before any change:
+  `/DATA/AppData/dentec-erp/backups/before-erp-schema-20261003-211047.dump`.
+- **Left in place, owner to decide:** test database `dentec_erp_test` and
+  login role `dentec_test` (member of `dentec_app`), used to run the store
+  suite on the real server. Removing them is the owner's call.
+- The owner's own data (`public.app_config`, `public.memories`,
+  `public.song_of_the_day`) and every Supabase container are untouched.
+  Rule: never reset, recreate, restart or delete anything Supabase without
+  explicit approval.
+
+## Phase 3 — code complete 2026-10-04, awaiting owner account + approval
+
+**Decision (owner):** the ERP has its OWN accounts, not Supabase Auth. Reason:
+the owner's other project's tables (`memories`, `song_of_the_day`,
+`app_config`) grant read/update/delete to ANY authenticated Supabase user, so
+ERP staff with Supabase accounts could have touched that data. No Supabase
+keys or packages are used by the app.
+
+**Built:** `0002_accounts.sql` (erp.credentials / sessions / auth_tokens);
+`src/lib/auth/` (scrypt passwords, hashed 14-day session cookie, lockout after
+5 wrong passwords, single-use 24h invite/reset links stored hashed);
+`src/lib/permissions.ts` (role matrix) enforced in every action and page,
+print and PDF; login / accept / forgot pages; Users page with link issuing;
+middleware sends cookie-less requests to `/login`.
+
+**Verified locally (throwaway PGlite db):** invite link sets a password and
+signs in; a spent link is refused; revoked session lands on login; technician
+is refused invoices, purchasing, accounting, reports and settings; typecheck
+and `npm run build` clean.
+
+**Server state (2026-10-04):** migrations 0002 (accounts) and 0003
+(`service_lead` role) applied and recorded. Backup before:
+`/DATA/AppData/dentec-erp/backups/before-accounts-20261004-001726.dump`.
+SSH user is `Ahmed-Arslan` (key `dentec_deploy`). People created, no passwords
+or links yet: Ahmed Arslan and Abdulmunim Arslan (owners), Adel Heylani
+(`service_lead`: service + stock edit, suppliers/POs view, cost-free reports),
+The Accountant (`dentec.team@gmail.com`). Mohammed Tesawi (technician) is added
+when his email is known.
+
+**Still to do before the checkpoint:**
+1. Once the app runs against the server DB (Phase 5 container, or a local run
+   through an SSH tunnel), issue each person's invite link:
+   `npx tsx scripts/create-owner.ts --email harahahmad33@gmail.com` (links last 24 h).
+2. Owner confirms the role matrix, then Phase 4.
+
+## Phase 3 — Accounts
+
+- Login, set-password (from invite), forgot/reset password, sign-out and a
+  user menu in the top bar.
+- Middleware protects every route. Print pages and the PDF API stay protected:
+  the PDF renderer forwards the session.
+- `users` becomes profiles linked to `auth.users`, and the role lives there.
+- `src/lib/permissions.ts` holds the matrix above. It is checked in every
+  action, and the navigation hides what a role cannot open.
+- The `ViewRole` cookie is retired; the dashboard follows the real role.
+- Auth runs through server actions only, so Supabase never needs to be public.
+- A one-time bootstrap script creates the owner account.
+- **Checkpoint:** log in as each role and confirm what is allowed and refused.
+
+## Phase 4 — Features — built and installed 2026-10-04, awaiting owner approval
+
+All built and verified on the local throwaway database (`npm run test:store`
+15 checks, `npm run test:import`, typecheck, production build). Migrations
+0004-0006 are applied on the server (backup before: `before-phase4-20261004-010024.dump`).
+
+- **Audit log** ✅ `0005`. Written by the app inside the same transaction as
+  every change (a diff of the database before and after), so it cannot drift
+  from the data and also records invoice/PO line edits. Append-only (a trigger
+  rejects UPDATE/DELETE). Settings → Activity (owner) and a "History" card on
+  invoice, purchase order, service job, customer and supplier pages, shown to
+  whoever may edit that area. *Deviation from the plan:* app-level diff rather
+  than Postgres triggers, because triggers cannot see the signed-in person
+  (the app uses one database role) or line-item changes. The stock ledger is
+  not repeated in the log; it is its own append-only record.
+- **Partial PO receipts** ✅ `0004`. Per-line received quantity; each delivery
+  writes its own stock moves; a "partially received" status; receipts list on
+  the order. A partly received order cannot be cancelled.
+- **Customer statement** ✅ no migration. Customer page → pick a period →
+  print view or PDF. Opening balance, invoices (debit), payments (credit),
+  running balance in base currency; closing equals the customer's balance.
+  Needs finance + customer view (owner, accountant, viewer).
+- **Serial + warranty** ✅ `0006`. Items flagged "track serial" with warranty
+  months. Issuing an invoice asks for one serial per unit; each becomes a unit
+  (customer, invoice, warranty end). Voiding the invoice releases the serials.
+  Service jobs pick the exact unit (suggests warranty status) and show sale
+  date and warranty end; the customer page lists their machines; serials print
+  on the invoice.
+- **Import** ✅ no migration. Settings → Import: products, spare parts,
+  customers, suppliers, opening stock from CSV or .xlsx with a template
+  download. Preview with row-by-row errors; all-or-nothing write that
+  re-validates under the write lock.
+- **Backups** ✅ installed. `/DATA/AppData/dentec-erp/backup.sh` dumps only the
+  `erp` schema (custom format, verified readable before it is kept) every night
+  at 02:30 via the deploy user's crontab, keeps 30 days, logs to
+  `backups/backup.log` / `cron.log`. First run and a real restore test passed
+  (`restore-test.sh`: 23 tables, identical row counts, scratch database
+  dropped). The first scheduled run (02:30) is still to be confirmed. Backups
+  sit on the same box, so an off-box copy is still advisable.
+- **Checkpoint:** demo of each feature.
+
+## Phase 5 — Deployment — live at https://erp.dentec.cloud since 2026-10-04, owner-verified
+
+- `Dockerfile`: Next standalone build plus Chromium for PDFs.
+- `docker-compose` on the ZimaOS box, on Supabase's Docker network, with a
+  `cloudflared` container. Only the app is public.
+- Supabase `SITE_URL` and redirect URLs point at the public domain so invite
+  and reset links work.
+- `DEPLOY.md` runbook: update, restart, logs, backup, restore.
+- **Checkpoint:** live at the public URL over HTTPS.
+
+**As built:** the box has no `docker compose` or Node, so `deploy.sh` uses plain
+docker: the app joins `supabase_default` and a private `dentec-erp-edge`
+network; the tunnel (`dentec-erp-tunnel`) sits on the private network only.
+Option B for `SITE_URL`: the app is its own auth, so Supabase config was not
+touched. Runbook: `DEPLOY.md`.
+
+## Phase 6 — Verification and handover
+
+- End-to-end: every workflow as every role, on phone and desktop, AR and TR.
+- Security: unauthenticated access is refused everywhere, role refusals hold,
+  and no secrets are in the repo.
+- `npx tsc --noEmit` is silent, and `npm run build` is clean.
+- `PROJECT.md`, `CONVENTIONS.md`, `CLAUDE.md` and `README.md` are updated to
+  match the new reality (auth exists, ledger in Postgres, no seed).
+- The Vercel project is deleted, after asking the owner to confirm.

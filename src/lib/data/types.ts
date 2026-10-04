@@ -151,7 +151,7 @@ export interface DispatchInfo {
 /* People                                                              */
 /* ------------------------------------------------------------------ */
 
-export type Role = "owner" | "accountant" | "sales" | "technician" | "viewer";
+export type Role = "owner" | "accountant" | "sales" | "technician" | "service_lead" | "viewer";
 
 export interface User extends Base {
   name: string;
@@ -159,6 +159,8 @@ export interface User extends Base {
   phone: string;
   role: Role;
   active: boolean;
+  // Sign-in credentials live in erp.credentials, deliberately outside this
+  // type: the users list is sent to the browser, password hashes must not be.
 }
 
 export type PartyKind = "clinic" | "hospital" | "lab" | "dealer" | "other";
@@ -228,6 +230,10 @@ export interface Item extends Base {
   fitsItemIds: ID[];
   notes: string;
   active: boolean;
+  /** Machines: every unit sold is recorded by serial number. Empty reads as false. */
+  tracksSerial?: boolean;
+  /** How long the warranty runs from the sale date. Empty or 0 means none. */
+  warrantyMonths?: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -296,6 +302,10 @@ export interface DocumentLine {
   unitPrice: number; // in the currency of the parent document
   discountPercent: number;
   taxRate: number; // percent
+  /** Purchase orders only: how much of this line has been received so far. Empty reads as 0. */
+  receivedQty?: number;
+  /** Sales invoices only: serial numbers of the units on this line, entered at issue. */
+  serials?: string[];
 }
 
 export interface SalesInvoice extends Base {
@@ -438,6 +448,22 @@ export interface ServiceJob extends Base {
   closedAt: ISODateTime | null;
   /** The invoice raised from this job, if it has been billed. */
   invoiceId?: ID | null;
+  /** The exact machine being serviced, when it was sold through the ERP. */
+  unitId?: ID | null;
+}
+
+/**
+ * One physical machine, from the moment it was sold: which customer has it,
+ * on which invoice, and until when it is under warranty.
+ */
+export interface MachineUnit extends Base {
+  itemId: ID;
+  serialNo: string;
+  customerId: ID | null;
+  invoiceId: ID | null;
+  soldAt: ISODate | null;
+  warrantyEnd: ISODate | null;
+  notes: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -458,6 +484,7 @@ export interface Database {
   payments: Payment[];
   expenses: Expense[];
   serviceJobs: ServiceJob[];
+  units: MachineUnit[];
 }
 
 /** Every collection key except the settings singleton. */

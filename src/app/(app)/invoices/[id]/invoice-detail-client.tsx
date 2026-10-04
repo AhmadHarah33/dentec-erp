@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type {
   Party,
   Payment,
@@ -17,6 +18,7 @@ import { formatDate, today } from "@/lib/dates";
 import {
   issueInvoice,
   voidInvoice,
+  deleteInvoice,
   recordInvoicePayment,
 } from "@/app/actions/sales";
 import { PageHeader, DetailRow, EmptyState } from "@/components/ui/page";
@@ -31,17 +33,22 @@ import {
   Num,
   NumberInput,
   Select,
+  Textarea,
 } from "@/components/ui/primitives";
 import { Modal, Confirm } from "@/components/ui/modal";
 import { IconPrint } from "@/components/ui/icons";
 import { DownloadPdfButton } from "@/components/app/download-pdf";
 import { InvoiceBilling } from "@/components/app/invoice-billing";
+import { DateInput } from "@/components/ui/date-input";
+import { useCan } from "@/components/app/member-context";
+import { RecordHistory } from "@/components/app/record-history";
 
 interface LineItem {
   id: string;
   name: string;
   sku: string;
   unit: string;
+  tracksSerial: boolean;
 }
 
 export function InvoiceDetailClient({
@@ -64,9 +71,43 @@ export function InvoiceDetailClient({
   locale: string;
 }) {
   const t = useT();
+  // Sales may draft and issue; voiding needs full invoice rights; taking
+  // money is a finance action. The server checks each again.
+  const canDraft = useCan("invoices", "limited");
+  const canVoid = useCan("invoices", "edit");
+  const canPay = useCan("finance", "edit");
   const [pending, startTransition] = useTransition();
-  const [confirming, setConfirming] = useState<"issue" | "void" | null>(null);
+  const router = useRouter();
+  const [confirming, setConfirming] = useState<"issue" | "void" | "delete" | null>(null);
   const [paying, setPaying] = useState(false);
+  // Serial-tracked lines need their serials before the invoice can be issued.
+  const trackedLines = invoice.lines.filter((l) => lineItems.find((x) => x.id === l.id)?.tracksSerial);
+  const [serialsOpen, setSerialsOpen] = useState(false);
+  const [serialText, setSerialText] = useState<Record<string, string>>({});
+  const parseSerials = (text: string) =>
+    text.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
+  function startIssue() {
+    if (trackedLines.length > 0) {
+      setError(null);
+      setSerialsOpen(true);
+    } else {
+      setConfirming("issue");
+    }
+  }
+  function submitSerials() {
+    const serials = Object.fromEntries(trackedLines.map((l) => [l.id, parseSerials(serialText[l.id] ?? "")]));
+    setError(null);
+    startTransition(async () => {
+      const result = await issueInvoice(invoice.id, serials);
+      if (result.ok) {
+        setSerialsOpen(false);
+        router.refresh();
+      } else {
+        // Stay open: what was typed is still there to correct.
+        setError(t(result.errorKey as MessageKey) + (result.detail ? ` — ${result.detail}` : ""));
+      }
+    });
+  }
   const [error, setError] = useState<string | null>(null);
 
   const base = settings.baseCurrency;
@@ -123,17 +164,22 @@ export function InvoiceDetailClient({
               {t("action.print")}
             </Button>
             <DownloadPdfButton kind="invoices" id={invoice.id} />
-            {isDraft && (
-              <Button variant="primary" onClick={() => setConfirming("issue")}>
+            {isDraft && canDraft && (
+              <Button variant="danger" onClick={() => setConfirming("delete")}>
+                {t("action.delete")}
+              </Button>
+            )}
+            {isDraft && canDraft && (
+              <Button variant="primary" onClick={startIssue}>
                 {t("action.issue")}
               </Button>
             )}
-            {!isDraft && !isVoid && !settled && (
+            {!isDraft && !isVoid && !settled && canPay && (
               <Button variant="primary" onClick={() => setPaying(true)}>
                 {t("action.recordPayment")}
               </Button>
             )}
-            {!isDraft && !isVoid && (
+            {!isDraft && !isVoid && canVoid && (
               <Button variant="danger" onClick={() => setConfirming("void")}>
                 {t("action.void")}
               </Button>
@@ -197,15 +243,15 @@ export function InvoiceDetailClient({
           )}
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-4 print:block">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 print:block">
           <div className="lg:col-span-2 min-w-0 flex flex-col gap-4">
             <Card className="print:border-0">
               <div className="print:hidden">
                 <CardHeader
-                  title={t("label.description")}
+                  title={t("label.lines")}
                   meta={t("msg.rowsCount", { n: invoice.lines.length })}
                   action={
-                    isDraft ? (
+                    isDraft && canDraft ? (
                       <Link
                         href={`/invoices/${invoice.id}/edit`}
                         className="text-2xs text-accent hover:underline"
@@ -248,7 +294,7 @@ export function InvoiceDetailClient({
                           <td className="h-11 px-3">
                             {meta?.name ?? line.description}
                             {meta?.sku && (
-                              <Num className="text-2xs text-faint ms-2">{meta.sku}</Num>
+                              <span className="ms-2"><Num className="text-2xs text-faint">{meta.sku}</Num></span>
                             )}
                           </td>
                           <td className="h-11 px-3 text-end">
@@ -345,7 +391,7 @@ export function InvoiceDetailClient({
             <InvoiceBilling invoice={invoice} customer={customer} />
 
             <Card>
-              <CardHeader title={t("label.description")} />
+              <CardHeader title={t("label.details")} />
               <div className="px-3 py-1 divide-y divide-line">
                 <DetailRow label={t("label.customer")}>
                   {customer ? (
@@ -395,7 +441,7 @@ export function InvoiceDetailClient({
                         <td className="h-10 px-3">
                           {t(`method.${p.method}` as MessageKey)}
                           {p.reference && (
-                            <Num className="text-2xs text-faint ms-2">{p.reference}</Num>
+                            <span className="ms-2"><Num className="text-2xs text-faint">{p.reference}</Num></span>
                           )}
                         </td>
                         <td className="h-10 px-3 text-end">
@@ -413,19 +459,89 @@ export function InvoiceDetailClient({
         </div>
       </div>
 
+      <RecordHistory collection="salesInvoices" id={invoice.id} area="invoices" />
+
+      <Modal
+        open={serialsOpen}
+        onClose={() => setSerialsOpen(false)}
+        title={t("serial.modalTitle")}
+        description={t("serial.modalHint")}
+        footer={
+          <>
+            <Button onClick={() => setSerialsOpen(false)} disabled={pending}>
+              {t("action.cancel")}
+            </Button>
+            <Button variant="primary" onClick={submitSerials} disabled={pending}>
+              {t("action.issue")}
+            </Button>
+          </>
+        }
+      >
+        {error && (
+          <p className="text-2xs text-danger border border-danger-soft bg-danger-soft rounded-sm p-2 mb-3">{error}</p>
+        )}
+        <div className="space-y-4">
+          {trackedLines.map((line) => {
+            const info = lineItems.find((x) => x.id === line.id);
+            return (
+              <Field
+                key={line.id}
+                label={`${info?.name ?? ""} · ${info?.sku ?? ""}`}
+                hint={t("serial.perLine", { qty: line.qty })}
+              >
+                <Textarea
+                  dir="ltr"
+                  rows={Math.min(Math.max(line.qty, 2), 6)}
+                  value={serialText[line.id] ?? ""}
+                  onChange={(e) => setSerialText({ ...serialText, [line.id]: e.target.value })}
+                />
+              </Field>
+            );
+          })}
+        </div>
+      </Modal>
+
       <Confirm
         open={confirming !== null}
         onClose={() => setConfirming(null)}
-        onConfirm={() =>
+        onConfirm={() => {
+          if (confirming === "delete") {
+            // A draft has moved no stock and taken no payment, so it can go
+            // outright; there is nothing left to show, so leave the page.
+            setError(null);
+            startTransition(async () => {
+              const result = await deleteInvoice(invoice.id);
+              if (result.ok) router.push("/invoices");
+              else setError(t(result.errorKey as MessageKey));
+            });
+            return;
+          }
           run(() =>
             confirming === "issue" ? issueInvoice(invoice.id) : voidInvoice(invoice.id),
-          )
+          );
+        }}
+        title={
+          confirming === "issue"
+            ? t("action.issue")
+            : confirming === "delete"
+              ? t("action.delete")
+              : t("action.void")
         }
-        title={confirming === "issue" ? t("action.issue") : t("action.void")}
         message={
-          error ?? (confirming === "issue" ? t("msg.confirmIssue") : t("msg.confirmVoid"))
+          error ??
+          (confirming === "issue"
+            ? t("msg.confirmIssue")
+            : confirming === "delete"
+              ? t("msg.confirmDeleteHint")
+              : t("msg.confirmVoid"))
         }
-        confirmLabel={confirming === "issue" ? t("action.issue") : t("action.void")}
+        confirmLabel={
+          confirming === "issue"
+            ? t("action.issue")
+            : confirming === "delete"
+              ? t("action.delete")
+              : t("action.void")
+        }
         tone={confirming === "issue" ? "primary" : "danger"}
         pending={pending}
       />
@@ -461,13 +577,11 @@ export function InvoiceDetailClient({
           </>
         }
       >
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label={t("label.date")}>
-            <Input
-              type="date"
-              dir="ltr"
+            <DateInput
               value={payForm.date}
-              onChange={(e) => setPayForm({ ...payForm, date: e.target.value })}
+              onChange={(v) => setPayForm({ ...payForm, date: v })}
             />
           </Field>
           <Field

@@ -222,7 +222,14 @@ export function DataTable<T>({
                           priorityClass(c),
                         )}
                       >
-                        {c.render(row)}
+                        {/* An inline isolate per cell: a Latin name keeps its
+                            punctuation on its own end ("Siger Medical Co.",
+                            not ".Siger Medical Co") while the cell's
+                            alignment still follows the page. Putting
+                            plaintext on the <td> itself would also flip the
+                            alignment, pushing Latin names to the left edge
+                            of an Arabic column. */}
+                        <span className="[unicode-bidi:plaintext]">{c.render(row)}</span>
                       </td>
                     ))}
                   </tr>

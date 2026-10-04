@@ -24,6 +24,9 @@ import { DataTable, type Column } from "@/components/ui/table";
 import { PageTabs } from "@/components/ui/tabs";
 import { STOCK_TABS } from "@/lib/tabs";
 import { Modal } from "@/components/ui/modal";
+import { DateInput } from "@/components/ui/date-input";
+import { useToast } from "@/components/ui/toast";
+import { useCan } from "@/components/app/member-context";
 
 export interface InventoryRow {
   item: Item;
@@ -36,16 +39,21 @@ export function InventoryClient({
   rows,
   warehouses,
   categories,
+  showCost,
   currency,
   locale,
 }: {
   rows: InventoryRow[];
   warehouses: Warehouse[];
   categories: Category[];
+  showCost: boolean;
   currency: CurrencyCode;
   locale: string;
 }) {
   const t = useT();
+  // Courtesy only: adjustStock/transferStock refuse on their own.
+  const canEdit = useCan("inventory", "edit");
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [onlyLow, setOnlyLow] = useState(false);
   const [typeFilter, setTypeFilter] = useState("");
@@ -109,7 +117,10 @@ export function InventoryClient({
     setError(null);
     startTransition(async () => {
       const result = await adjustStock({ ...adjustForm, itemId: adjusting.item.id });
-      if (result.ok) setAdjusting(null);
+      if (result.ok) {
+        setAdjusting(null);
+        toast(t("msg.saved"));
+      }
       else setError(t(result.errorKey as MessageKey));
     });
   }
@@ -119,7 +130,10 @@ export function InventoryClient({
     setError(null);
     startTransition(async () => {
       const result = await transferStock({ ...transferForm, itemId: transferring.item.id });
-      if (result.ok) setTransferring(null);
+      if (result.ok) {
+        setTransferring(null);
+        toast(t("msg.saved"));
+      }
       else setError(t(result.errorKey as MessageKey));
     });
   }
@@ -237,12 +251,14 @@ export function InventoryClient({
       <PageTabs tabs={STOCK_TABS.map((x) => ({ href: x.href, label: t(x.labelKey) }))} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatTile
-          label={t("dash.stockValue")}
-          value={formatMoneyCompact(totals.value, currency, locale)}
-          icon={IconCoins}
-          meta={t("dash.atStandardCost")}
-        />
+        {showCost && (
+          <StatTile
+            label={t("dash.stockValue")}
+            value={formatMoneyCompact(totals.value, currency, locale)}
+            icon={IconCoins}
+            meta={t("dash.atStandardCost")}
+          />
+        )}
         <StatTile
           label={t("label.quantity")}
           value={formatNumber(totals.units, locale, 0)}
@@ -264,7 +280,7 @@ export function InventoryClient({
 
       <DataTable
         rows={filtered}
-        columns={columns}
+        columns={columns.filter((c) => (canEdit || c.key !== "actions") && (showCost || c.key !== "value"))}
         rowKey={(r) => r.item.id}
         pageSize={30}
         emptyTitle={t("empty.items")}
@@ -323,7 +339,7 @@ export function InventoryClient({
           </>
         }
       >
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label={t("label.warehouse")}>
             <Select
               value={adjustForm.warehouseId}
@@ -338,11 +354,9 @@ export function InventoryClient({
             </Select>
           </Field>
           <Field label={t("label.date")}>
-            <Input
-              type="date"
+            <DateInput
               value={adjustForm.date}
-              onChange={(e) => setAdjustForm({ ...adjustForm, date: e.target.value })}
-              dir="ltr"
+              onChange={(v) => setAdjustForm({ ...adjustForm, date: v })}
             />
           </Field>
           <Field
@@ -383,7 +397,7 @@ export function InventoryClient({
           </>
         }
       >
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label={t("action.transfer")}>
             <Select
               value={transferForm.fromWarehouseId}
@@ -421,11 +435,9 @@ export function InventoryClient({
             />
           </Field>
           <Field label={t("label.date")}>
-            <Input
-              type="date"
+            <DateInput
               value={transferForm.date}
-              onChange={(e) => setTransferForm({ ...transferForm, date: e.target.value })}
-              dir="ltr"
+              onChange={(v) => setTransferForm({ ...transferForm, date: v })}
             />
           </Field>
           <Field label={t("label.notes")} className="sm:col-span-2">

@@ -2,12 +2,15 @@ import { notFound } from "next/navigation";
 import { snapshot } from "@/lib/data/repository";
 import { getI18n } from "@/lib/i18n/server";
 import { PurchaseDetailClient } from "./purchase-detail-client";
+import { requireAccess } from "@/lib/auth/server";
+import { withoutCost } from "@/lib/permissions";
 
 export default async function PurchaseDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const member = await requireAccess("purchasing", "view");
   const { id } = await params;
   const { locale } = await getI18n();
   const db = await snapshot();
@@ -21,7 +24,7 @@ export default async function PurchaseDetailPage({
   const warehouse = db.warehouses.find((w) => w.id === order.warehouseId);
   if (!warehouse) notFound();
 
-  const items = db.items;
+  const items = withoutCost(db.items, member.role);
   const settings = db.settings;
 
   // Orders drafted to un-block a service job carry the link back to it.
@@ -29,8 +32,17 @@ export default async function PurchaseDetailPage({
     ? db.serviceJobs.find((j) => j.id === order.serviceJobId)
     : undefined;
 
+  // Each delivery wrote its own stock moves; group them by day for the receipts list.
+  const receipts = new Map<string, number>();
+  for (const m of db.stockMoves) {
+    if (m.refType === "purchase_order" && m.refId === order.id && m.type === "purchase") {
+      receipts.set(m.date, (receipts.get(m.date) ?? 0) + m.qtyDelta);
+    }
+  }
+
   return (
     <PurchaseDetailClient
+      receipts={[...receipts].sort(([a], [b]) => (a < b ? -1 : 1)).map(([date, qty]) => ({ date, qty }))}
       order={order}
       job={job ? { id: job.id, number: job.number } : null}
       supplier={supplier}

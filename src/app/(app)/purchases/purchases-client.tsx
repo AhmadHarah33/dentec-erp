@@ -13,6 +13,8 @@ import { Badge, Input, Num, Select, LinkButton } from "@/components/ui/primitive
 import { DataTable, type Column } from "@/components/ui/table";
 import { Drawer, DrawerSection } from "@/components/ui/drawer";
 import { DetailRow } from "@/components/ui/page";
+import { DateInput } from "@/components/ui/date-input";
+import { useCan } from "@/components/app/member-context";
 
 export function PurchasesClient({
   orders,
@@ -28,6 +30,7 @@ export function PurchasesClient({
   locale: string;
 }) {
   const t = useT();
+  const canEdit = useCan("purchasing", "edit");
   const [viewing, setViewing] = useState<PurchaseOrder | null>(null);
   const [status, setStatus] = useState("");
   const [from, setFrom] = useState("");
@@ -121,9 +124,11 @@ export function PurchasesClient({
         title={t("page.purchases.title")}
         subtitle={t("page.purchases.subtitle")}
         actions={
-          <LinkButton href="/purchases/new" variant="primary">
-            {t("page.purchases.new")}
-          </LinkButton>
+          canEdit && (
+            <LinkButton href="/purchases/new" variant="primary">
+              {t("page.purchases.new")}
+            </LinkButton>
+          )
         }
       />
 
@@ -165,21 +170,19 @@ export function PurchasesClient({
                 </option>
               ))}
             </Select>
-            <Input
-              type="date"
+            <DateInput
               value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="w-36"
-              dir="ltr"
-              aria-label={t("label.date")}
+              onChange={(v) => setFrom(v)}
+              className="w-40"
+              placeholder={t("label.fromDate")}
+              clearable
             />
-            <Input
-              type="date"
+            <DateInput
               value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="w-36"
-              dir="ltr"
-              aria-label={t("label.dueDate")}
+              onChange={(v) => setTo(v)}
+              className="w-40"
+              placeholder={t("label.toDate")}
+              clearable
             />
           </>
         }
