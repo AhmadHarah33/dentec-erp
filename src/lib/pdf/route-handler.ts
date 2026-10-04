@@ -7,6 +7,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getLocale } from "@/lib/i18n/server";
 import { attachmentHeader, internalOrigin, RenderBusy, renderPdf } from "./render";
 import { SESSION_COOKIE } from "@/lib/auth/cookie";
+import { DEMO } from "@/lib/demo";
 import { LOCALE_COOKIE } from "@/lib/i18n";
 import { loadDocument, pdfFilename, type DocumentKind } from "./document";
 import { currentMember } from "@/lib/auth/server";
@@ -25,11 +26,17 @@ function busy(): Response {
   return NextResponse.json({ error: "busy" }, { status: 503, headers: { "Retry-After": "5" } });
 }
 
+/** The demo host cannot render PDFs; say so plainly instead of failing inside Chromium. */
+function disabledInDemo(): Response {
+  return NextResponse.json({ error: "disabled_in_demo" }, { status: 503 });
+}
+
 export async function handlePdfRequest(
   request: NextRequest,
   kind: DocumentKind,
   id: string,
 ): Promise<Response> {
+  if (DEMO) return disabledInDemo();
   const member = await currentMember();
   if (!member) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   if (!can(member.role, kind === "invoice" ? "invoices" : "purchasing", "view")) {
@@ -85,6 +92,7 @@ export async function handlePdfRequest(
 
 /** The customer statement as a PDF: same renderer, same forwarded session. */
 export async function handleStatementPdf(request: NextRequest, customerId: string): Promise<Response> {
+  if (DEMO) return disabledInDemo();
   const member = await currentMember();
   if (!member) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   if (!can(member.role, "finance", "view") || !can(member.role, "customers", "view")) {

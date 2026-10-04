@@ -1,7 +1,8 @@
 import { Sidebar } from "@/components/app/sidebar";
 import { Topbar } from "@/components/app/topbar";
 import { snapshot } from "@/lib/data/repository";
-import { getLocale } from "@/lib/i18n/server";
+import { getI18n } from "@/lib/i18n/server";
+import { DEMO } from "@/lib/demo";
 import { buildSearchIndex } from "@/lib/search";
 import { requireMember } from "@/lib/auth/server";
 import { MemberProvider } from "@/components/app/member-context";
@@ -14,7 +15,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // turned away requests with no session; this turns away sessions that do
   // not belong to an active ERP member.
   const member = await requireMember();
-  const locale = await getLocale();
+  const { locale, t } = await getI18n();
   const db = await snapshot();
   const search = buildSearchIndex(db, locale, member.role);
 
@@ -25,6 +26,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="flex min-h-dvh">
         <Sidebar />
         <div className="flex-1 min-w-0 flex flex-col">
+          {DEMO && (
+            <div className="bg-accent/10 text-accent text-2xs font-medium text-center px-4 py-1.5 hairline-b">
+              {t("demo.banner")}
+            </div>
+          )}
           <Topbar search={search} />
           {/* overflow-x-clip is a guard, not a workaround for sloppy layout:
               one page that overflows would otherwise widen the layout viewport
