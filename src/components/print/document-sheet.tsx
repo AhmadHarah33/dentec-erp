@@ -96,6 +96,11 @@ function N({ children }: { children: React.ReactNode }) {
   return <span className="num">{children}</span>;
 }
 
+/** Cell spacing for the lines table: padded between columns, flush at the table's outer edges. */
+const CELL = "py-1.5 px-1.5 first:ps-0 last:pe-0";
+/** Headers read as one tight line each; long ones wrap inside their own column, never into a neighbour. */
+const HEAD = "font-medium py-1.5 px-1.5 first:ps-0 last:pe-0 leading-tight";
+
 export function DocumentSheet(props: SheetProps) {
   const {
     kind,
@@ -145,6 +150,9 @@ export function DocumentSheet(props: SheetProps) {
       ? t(`doc.type.${documentType}` as "doc.type.export")
       : t("print.invoice")
     : t("print.purchase");
+
+  // The serial column earns its width only when a machine on this document has one.
+  const hasSerials = lines.some((l) => Boolean(serials?.[l.id]));
 
   return (
     <article className="print-doc mx-auto w-full max-w-[210mm] bg-white text-ink p-8 text-xs">
@@ -294,20 +302,43 @@ export function DocumentSheet(props: SheetProps) {
       )}
 
       {/* ---- Lines ------------------------------------------------- */}
-      <table className="w-full mt-4 text-2xs border-collapse">
+      {/*
+        Fixed layout with explicit widths: with `auto` the browser sized columns
+        by their contents, so long headers wrapped and ran into each other and
+        the SKU touched the description. The description takes whatever is left;
+        every other column has a width that fits its widest header and value.
+        Cells carry padding except at the outer edges, so the table's first and
+        last columns stay flush with the sections above and below it.
+      */}
+      <table className="w-full mt-4 text-2xs border-collapse table-fixed">
+        <colgroup>
+          <col className="w-[8mm]" />
+          <col className="w-[22mm]" />
+          <col />
+          {hasSerials && <col className="w-[24mm]" />}
+          <col className="w-[13mm]" />
+          {showMoney && (
+            <>
+              <col className="w-[30mm]" />
+              <col className="w-[16mm]" />
+              <col className="w-[17mm]" />
+              <col className="w-[30mm]" />
+            </>
+          )}
+        </colgroup>
         <thead>
-          <tr className="border-b border-ink/40 text-muted">
-            <th className="text-start font-medium py-1.5 w-6">#</th>
-            <th className="text-start font-medium py-1.5">{t("print.code")}</th>
-            <th className="text-start font-medium py-1.5">{t("label.description")}</th>
-            <th className="text-start font-medium py-1.5">{t("label.serialNo")}</th>
-            <th className="text-end font-medium py-1.5">{t("print.qty")}</th>
+          <tr className="border-b border-ink/40 text-muted align-bottom">
+            <th className={`${HEAD} text-start`}>#</th>
+            <th className={`${HEAD} text-start`}>{t("print.code")}</th>
+            <th className={`${HEAD} text-start`}>{t("label.description")}</th>
+            {hasSerials && <th className={`${HEAD} text-start`}>{t("label.serialNo")}</th>}
+            <th className={`${HEAD} text-end`}>{t("print.qty")}</th>
             {showMoney && (
               <>
-                <th className="text-end font-medium py-1.5">{t("label.unitPrice")}</th>
-                <th className="text-end font-medium py-1.5">{t("label.discount")}</th>
-                <th className="text-end font-medium py-1.5">{t("print.taxRate")}</th>
-                <th className="text-end font-medium py-1.5">{t("label.lineTotal")}</th>
+                <th className={`${HEAD} text-end`}>{t("label.unitPrice")}</th>
+                <th className={`${HEAD} text-end`}>{t("label.discount")}</th>
+                <th className={`${HEAD} text-end`}>{t("print.taxRate")}</th>
+                <th className={`${HEAD} text-end`}>{t("label.lineTotal")}</th>
               </>
             )}
           </tr>
@@ -322,13 +353,13 @@ export function DocumentSheet(props: SheetProps) {
               "—";
             return (
               <tr key={line.id} className="border-b border-line align-top">
-                <td className="py-1.5">
+                <td className={CELL}>
                   <N>{i + 1}</N>
                 </td>
-                <td className="py-1.5">
+                <td className={`${CELL} break-all`}>
                   <N>{item?.sku ?? "—"}</N>
                 </td>
-                <td className="py-1.5 pe-2">
+                <td className={CELL}>
                   {name}
                   {item?.brand || item?.model ? (
                     <span className="text-muted">
@@ -337,24 +368,26 @@ export function DocumentSheet(props: SheetProps) {
                     </span>
                   ) : null}
                 </td>
-                <td className="py-1.5">
-                  <N>{serials?.[line.id] || "—"}</N>
-                </td>
-                <td className="py-1.5 text-end">
+                {hasSerials && (
+                  <td className={`${CELL} break-all`}>
+                    <N>{serials?.[line.id] || "—"}</N>
+                  </td>
+                )}
+                <td className={`${CELL} text-end`}>
                   <N>{qty(line.qty)}</N>
                 </td>
                 {showMoney && (
                   <>
-                    <td className="py-1.5 text-end">
+                    <td className={`${CELL} text-end whitespace-nowrap`}>
                       <N>{money(line.unitPrice)}</N>
                     </td>
-                    <td className="py-1.5 text-end">
+                    <td className={`${CELL} text-end`}>
                       <N>{line.discountPercent ? `${line.discountPercent}%` : "—"}</N>
                     </td>
-                    <td className="py-1.5 text-end">
+                    <td className={`${CELL} text-end`}>
                       <N>{line.taxRate}%</N>
                     </td>
-                    <td className="py-1.5 text-end font-medium">
+                    <td className={`${CELL} text-end font-medium whitespace-nowrap`}>
                       <N>{money(computed?.total ?? 0)}</N>
                     </td>
                   </>
