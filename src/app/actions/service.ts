@@ -1,10 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { remove, snapshot, transaction, update } from "@/lib/data/repository";
+import { transaction } from "@/lib/data/repository";
 import type { ServiceJob, ServiceStatus } from "@/lib/data/types";
 import { buildStockIndex, onHand } from "@/lib/stock";
 import { guard } from "@/lib/auth/server";
+import { jobInput, SERVICE_STATUSES } from "@/lib/inputs";
+import { oneOf, parse } from "@/lib/validate";
 import { fail, ok, STOCK_PATHS, type Result } from "./shared";
 
 type JobInput = Omit<ServiceJob, "id" | "createdAt" | "updatedAt" | "number" | "closedAt">;
@@ -28,37 +30,62 @@ function nextNumber(existing: string[], prefix: string): string {
 export async function saveJob(id: string | null, input: JobInput): Promise<Result<string>> {
   const gate = await guard("service", "edit");
   if (!gate.ok) return gate;
-  if (!input.customerId) return fail("msg.requiredField");
-  if (!input.reportedFault.trim()) return fail("msg.requiredField");
+  const parsed = parse(() => jobInput(input));
+  if (!parsed.ok) return parsed;
+  const { fields, parts: incoming } = parsed.data;
+  if (!fields.customerId) return fail("msg.requiredField");
+  if (!fields.reportedFault.trim()) return fail("msg.requiredField");
+  if (incoming.some((p) => p.qty <= 0)) return fail("msg.requiredField");
 
-  // A job tied to a unit carries that unit's item and serial, so the two can
-  // never disagree.
-  if (input.unitId) {
-    const unit = (await snapshot()).units.find((u) => u.id === input.unitId);
-    if (!unit) return fail("msg.error", "unit-not-found");
-    input = { ...input, machineItemId: unit.itemId, serialNo: unit.serialNo };
-  }
-
-  if (id) {
-    // Parts already taken from stock are frozen; only unconsumed ones may change.
-    const db = await snapshot();
-    const existing = db.serviceJobs.find((j) => j.id === id);
-    if (existing) {
-      const consumed = existing.parts.filter((p) => p.consumed);
-      const kept = consumed.every((c) =>
-        input.parts.some((p) => p.id === c.id && p.qty === c.qty && p.itemId === c.itemId),
-      );
-      if (!kept) return fail("msg.error", "consumed-parts-locked");
+  const outcome = await transaction((db, h): Result<string> => {
+    if (!db.customers.some((c) => c.id === fields.customerId)) return fail("msg.error", "unknown-reference");
+    const items = new Set(db.items.map((i) => i.id));
+    const warehouses = new Set(db.warehouses.map((w) => w.id));
+    if (
+      (fields.machineItemId && !items.has(fields.machineItemId)) ||
+      (fields.technicianId && !db.users.some((u) => u.id === fields.technicianId)) ||
+      incoming.some((p) => !items.has(p.itemId) || !warehouses.has(p.warehouseId))
+    ) {
+      return fail("msg.error", "unknown-reference");
     }
-    const row = await update("serviceJobs", id, input);
-    refresh(row.id);
-    return ok(row.id);
-  }
 
-  const newId = await transaction((db, h) => {
+    // A job tied to a unit carries that unit's item and serial, so the two can
+    // never disagree.
+    let data = fields;
+    if (fields.unitId) {
+      const unit = db.units.find((u) => u.id === fields.unitId);
+      if (!unit) return fail("msg.error", "unit-not-found");
+      data = { ...fields, machineItemId: unit.itemId, serialNo: unit.serialNo };
+    }
+
     const ts = h.now();
+
+    if (id) {
+      const row = db.serviceJobs.find((j) => j.id === id);
+      if (!row) return fail("msg.error", "not-found");
+
+      // Parts already taken from stock are frozen; only unconsumed ones may
+      // change. `consumed` is never read from the browser — it is true exactly
+      // for parts the ledger has a move for.
+      const consumed = new Map(row.parts.filter((p) => p.consumed).map((p) => [p.id, p]));
+      for (const c of consumed.values()) {
+        if (!incoming.some((p) => p.id === c.id && p.qty === c.qty && p.itemId === c.itemId)) {
+          return fail("msg.error", "consumed-parts-locked");
+        }
+      }
+      Object.assign(row, data, {
+        parts: incoming.map((p) => {
+          const frozen = consumed.get(p.id);
+          return frozen ?? { ...p, consumed: false };
+        }),
+        updatedAt: ts,
+      });
+      return ok(row.id);
+    }
+
     const row: ServiceJob = {
-      ...input,
+      ...data,
+      parts: incoming.map((p) => ({ ...p, consumed: false })),
       id: h.id(),
       number: nextNumber(
         db.serviceJobs.map((j) => j.number),
@@ -69,48 +96,47 @@ export async function saveJob(id: string | null, input: JobInput): Promise<Resul
       updatedAt: ts,
     };
     db.serviceJobs.push(row);
-    return row.id;
+    return ok(row.id);
   });
 
-  refresh(newId);
-  return ok(newId);
+  if (outcome.ok) refresh(outcome.data);
+  return outcome;
 }
 
 /**
  * Take the listed parts out of the workshop. Only parts not already consumed
- * are moved, so pressing the button twice cannot double-deduct.
+ * are moved, so pressing the button twice cannot double-deduct — and because
+ * "not already consumed" is decided inside the transaction, two presses at
+ * the same moment cannot both pass it either.
  */
 export async function consumeParts(id: string): Promise<Result<number>> {
   const gate = await guard("service", "edit");
   if (!gate.ok) return gate;
-  const db = await snapshot();
-  const job = db.serviceJobs.find((j) => j.id === id);
-  if (!job) return fail("msg.error", "not-found");
 
-  const pending = job.parts.filter((p) => !p.consumed);
-  if (pending.length === 0) return ok(0);
+  const outcome = await transaction((store, h): Result<number> => {
+    const row = store.serviceJobs.find((j) => j.id === id);
+    if (!row) return fail("msg.error", "not-found");
 
-  const index = buildStockIndex(db.stockMoves);
-  const needed = new Map<string, number>();
-  for (const p of pending) {
-    const key = p.itemId + "|" + p.warehouseId;
-    needed.set(key, (needed.get(key) ?? 0) + p.qty);
-  }
-  for (const [key, qty] of needed) {
-    const [itemId, warehouseId] = key.split("|");
-    if (onHand(index, itemId, warehouseId) < qty) {
-      const item = db.items.find((i) => i.id === itemId);
-      return fail("msg.insufficientStock", item?.nameAr ?? itemId);
+    const pending = row.parts.filter((p) => !p.consumed);
+    if (pending.length === 0) return ok(0);
+
+    const index = buildStockIndex(store.stockMoves);
+    const needed = new Map<string, number>();
+    for (const p of pending) {
+      const key = p.itemId + "|" + p.warehouseId;
+      needed.set(key, (needed.get(key) ?? 0) + p.qty);
     }
-  }
+    for (const [key, qty] of needed) {
+      const [itemId, warehouseId] = key.split("|");
+      if (onHand(index, itemId, warehouseId) < qty) {
+        const item = store.items.find((i) => i.id === itemId);
+        return fail("msg.insufficientStock", item?.nameAr ?? itemId);
+      }
+    }
 
-  await transaction((store, h) => {
-    const row = store.serviceJobs.find((j) => j.id === id)!;
     const ts = h.now();
     const today = new Date().toISOString().slice(0, 10);
-
-    for (const part of row.parts) {
-      if (part.consumed) continue;
+    for (const part of pending) {
       store.stockMoves.push({
         id: h.id(),
         date: today,
@@ -128,19 +154,31 @@ export async function consumeParts(id: string): Promise<Result<number>> {
       part.consumed = true;
     }
     row.updatedAt = ts;
+    return ok(pending.length);
   });
+  if (!outcome.ok) return outcome;
 
   refresh(id);
-  return ok(pending.length);
+  return outcome;
 }
 
 export async function setJobStatus(id: string, status: ServiceStatus): Promise<Result> {
   const gate = await guard("service", "edit");
   if (!gate.ok) return gate;
-  const patch: Partial<ServiceJob> = { status };
-  if (status === "delivered") patch.closedAt = new Date().toISOString();
-  else patch.closedAt = null;
-  await update("serviceJobs", id, patch);
+  const parsed = parse(() => oneOf(status, "status", SERVICE_STATUSES));
+  if (!parsed.ok) return parsed;
+
+  const outcome = await transaction((db, h): Result => {
+    const row = db.serviceJobs.find((j) => j.id === id);
+    if (!row) return fail("msg.error", "not-found");
+    const ts = h.now();
+    row.status = parsed.data;
+    row.closedAt = parsed.data === "delivered" ? ts : null;
+    row.updatedAt = ts;
+    return ok(undefined);
+  });
+  if (!outcome.ok) return outcome;
+
   refresh(id);
   return ok(undefined);
 }
@@ -148,11 +186,16 @@ export async function setJobStatus(id: string, status: ServiceStatus): Promise<R
 export async function deleteJob(id: string): Promise<Result> {
   const gate = await guard("service", "edit");
   if (!gate.ok) return gate;
-  const db = await snapshot();
-  const job = db.serviceJobs.find((j) => j.id === id);
-  if (!job) return fail("msg.error", "not-found");
-  if (job.parts.some((p) => p.consumed)) return fail("msg.error", "has-stock-moves");
-  await remove("serviceJobs", id);
+
+  const outcome = await transaction((db): Result => {
+    const index = db.serviceJobs.findIndex((j) => j.id === id);
+    if (index === -1) return fail("msg.error", "not-found");
+    if (db.serviceJobs[index].parts.some((p) => p.consumed)) return fail("msg.error", "has-stock-moves");
+    db.serviceJobs.splice(index, 1);
+    return ok(undefined);
+  });
+  if (!outcome.ok) return outcome;
+
   refresh();
   return ok(undefined);
 }

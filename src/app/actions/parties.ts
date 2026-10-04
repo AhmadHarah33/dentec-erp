@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { create, remove, snapshot, update } from "@/lib/data/repository";
 import type { Party } from "@/lib/data/types";
 import { guard } from "@/lib/auth/server";
+import { partyInput } from "@/lib/inputs";
+import { parse } from "@/lib/validate";
 import { fail, ok, type Result } from "./shared";
 
 type PartyInput = Omit<Party, "id" | "createdAt" | "updatedAt">;
@@ -17,15 +19,19 @@ export async function saveParty(
   // Customers and suppliers sit in different areas of the permission table.
   const gate = await guard(which === "customers" ? "customers" : "purchasing", "edit");
   if (!gate.ok) return gate;
-  if (!input.name.trim()) return fail("msg.requiredField");
+  const parsed = parse(() => partyInput(input));
+  if (!parsed.ok) return parsed;
+  const data = parsed.data;
+  if (!data.name.trim()) return fail("msg.requiredField");
 
   const db = await snapshot();
   const clash = db[which].find(
-    (p) => p.code.trim().toLowerCase() === input.code.trim().toLowerCase() && p.id !== id,
+    (p) => p.code.trim().toLowerCase() === data.code.trim().toLowerCase() && p.id !== id,
   );
-  if (input.code.trim() && clash) return fail("msg.error", "duplicate-code");
+  if (data.code.trim() && clash) return fail("msg.error", "duplicate-code");
+  if (id && !db[which].some((p) => p.id === id)) return fail("msg.error", "not-found");
 
-  const row = id ? await update(which, id, input) : await create(which, input);
+  const row = id ? await update(which, id, data) : await create(which, data);
   revalidatePath(`/${which}`);
   revalidatePath("/");
   return ok(row.id);

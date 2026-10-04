@@ -105,6 +105,10 @@ export async function invoiceJob(jobId: string): Promise<Result<string>> {
     "";
 
   const newId = await transaction((store, h) => {
+    // Checked again under the lock: two clicks must not raise two invoices.
+    const current = store.serviceJobs.find((j) => j.id === jobId);
+    if (!current) return null;
+    if (current.invoiceId && store.salesInvoices.some((i) => i.id === current.invoiceId)) return null;
     const ts = h.now();
     const invoice: SalesInvoice = {
       id: h.id(),
@@ -135,6 +139,7 @@ export async function invoiceJob(jobId: string): Promise<Result<string>> {
 
     return invoice.id;
   });
+  if (newId === null) return fail("msg.jobAlreadyInvoiced");
 
   refreshAll(jobId);
   return ok(newId);

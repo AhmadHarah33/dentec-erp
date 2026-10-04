@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { create, remove, snapshot, update } from "@/lib/data/repository";
 import type { Category, Item } from "@/lib/data/types";
 import { guard } from "@/lib/auth/server";
+import { categoryInput, itemInput } from "@/lib/inputs";
+import { parse } from "@/lib/validate";
 import { fail, ok, type Result } from "./shared";
 
 type CategoryInput = Omit<Category, "id" | "createdAt" | "updatedAt">;
@@ -25,12 +27,21 @@ export async function saveCategory(
 ): Promise<Result<string>> {
   const gate = await guard("catalog", "edit");
   if (!gate.ok) return gate;
-  if (!input.nameAr.trim()) return fail("msg.requiredField");
+  const parsed = parse(() => categoryInput(input));
+  if (!parsed.ok) return parsed;
+  const data = parsed.data;
+  if (!data.nameAr.trim()) return fail("msg.requiredField");
+
+  const known = await snapshot();
+  if (data.parentId && !known.categories.some((c) => c.id === data.parentId)) {
+    return fail("msg.error", "unknown-reference");
+  }
+  if (id && !known.categories.some((c) => c.id === id)) return fail("msg.error", "not-found");
 
   // A category cannot be its own parent, nor a descendant of itself.
-  if (id && input.parentId) {
-    const db = await snapshot();
-    let cursor: string | null = input.parentId;
+  if (id && data.parentId) {
+    const db = known;
+    let cursor: string | null = data.parentId;
     const seen = new Set<string>();
     while (cursor) {
       if (cursor === id) return fail("msg.error");
@@ -41,8 +52,8 @@ export async function saveCategory(
   }
 
   const row = id
-    ? await update("categories", id, input)
-    : await create("categories", input);
+    ? await update("categories", id, data)
+    : await create("categories", data);
   refresh(CATALOG_PATHS);
   return ok(row.id);
 }
@@ -69,15 +80,22 @@ export async function deleteCategory(id: string): Promise<Result> {
 export async function saveItem(id: string | null, input: ItemInput): Promise<Result<string>> {
   const gate = await guard("catalog", "edit");
   if (!gate.ok) return gate;
-  if (!input.nameAr.trim() || !input.sku.trim()) return fail("msg.requiredField");
+  const parsed = parse(() => itemInput(input));
+  if (!parsed.ok) return parsed;
+  const data = parsed.data;
+  if (!data.nameAr.trim() || !data.sku.trim()) return fail("msg.requiredField");
 
   const db = await snapshot();
   const clash = db.items.find(
-    (i) => i.sku.toLowerCase() === input.sku.trim().toLowerCase() && i.id !== id,
+    (i) => i.sku.toLowerCase() === data.sku.trim().toLowerCase() && i.id !== id,
   );
   if (clash) return fail("msg.error", "duplicate-sku");
+  if (id && !db.items.some((i) => i.id === id)) return fail("msg.error", "not-found");
+  if (data.categoryId && !db.categories.some((c) => c.id === data.categoryId)) {
+    return fail("msg.error", "unknown-reference");
+  }
 
-  const row = id ? await update("items", id, input) : await create("items", input);
+  const row = id ? await update("items", id, data) : await create("items", data);
   refresh(CATALOG_PATHS);
   return ok(row.id);
 }

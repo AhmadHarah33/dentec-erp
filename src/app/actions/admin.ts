@@ -7,6 +7,8 @@ import { endAllSessions, guard } from "@/lib/auth/server";
 import { emailAccountLink, issueToken } from "@/lib/auth/links";
 import { database } from "@/lib/data/store";
 import { mailEnabled } from "@/lib/mail";
+import { settingsPatch, userInput } from "@/lib/inputs";
+import { parse } from "@/lib/validate";
 import { fail, ok, type Result } from "./shared";
 
 /** What the users form may set. Passwords and links are managed by the account actions, not the form. */
@@ -35,6 +37,9 @@ function leavesNoOwner(db: Database, id: string, next: { role: Role; active: boo
 export async function saveUser(id: string | null, input: UserInput): Promise<Result<string>> {
   const gate = await guard("settings", "edit");
   if (!gate.ok) return gate;
+  const parsed = parse(() => userInput(input));
+  if (!parsed.ok) return parsed;
+  input = parsed.data;
   if (!input.name.trim()) return fail("msg.requiredField");
 
   const email = normEmail(input.email);
@@ -129,10 +134,13 @@ export async function issueAccountLink(
 export async function updateSettings(patch: Partial<Settings>): Promise<Result> {
   const gate = await guard("settings", "edit");
   if (!gate.ok) return gate;
-  if (patch.companyName !== undefined && !patch.companyName.trim()) {
+  const parsed = parse(() => settingsPatch(patch));
+  if (!parsed.ok) return parsed;
+  const clean = parsed.data;
+  if (clean.companyName !== undefined && !clean.companyName.trim()) {
     return fail("msg.requiredField");
   }
-  await saveSettings(patch);
+  await saveSettings(clean);
   // Currency, tax rate and company details appear on nearly every screen.
   revalidatePath("/", "layout");
   return ok(undefined);
